@@ -5,7 +5,8 @@
  */
 export function formatDate(iso: string): string {
   const [y, m, d] = iso.split('-');
-  return `${m}/${d}/${y}`;
+  const month = m ? String(Number(m)) : m;
+  return `${month}/${d}/${y}`;
 }
 
 export function todayIso(): string {
