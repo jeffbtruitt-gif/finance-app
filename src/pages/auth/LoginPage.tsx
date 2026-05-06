@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, Navigate } from 'react-router-dom';
 import { useAuth } from '@/api/auth';
+import { Brand, Button } from '@/components/ds';
 
 export function LoginPage() {
   const { session, signIn } = useAuth();
@@ -21,51 +22,87 @@ export function LoginPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
-      <div className="w-full max-w-sm rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
-        <div className="mb-1 text-lg font-bold tracking-tight">Truitt Family Finance</div>
-        <div className="mb-5 text-sm text-slate-500">Sign in to continue</div>
+    <div className="relative flex min-h-screen items-center justify-center bg-navy-900 px-4">
+      {/* Soft radial accent — gold glow behind the card to hint at the brand
+          without dominating. Subtle on small screens, larger on wide. */}
+      <div
+        className="pointer-events-none absolute inset-0 opacity-30"
+        style={{
+          backgroundImage:
+            'radial-gradient(circle at 30% 30%, rgba(201,168,76,0.25), transparent 60%), radial-gradient(circle at 70% 80%, rgba(59,85,154,0.45), transparent 55%)',
+        }}
+        aria-hidden
+      />
+      <div className="relative w-full max-w-sm rounded-xl border border-navy-700 bg-white p-7 shadow-xl">
+        <div className="mb-6 flex items-center justify-between">
+          <Brand size="md" />
+          <span className="text-[10px] font-medium uppercase tracking-wider text-gray-400">
+            Family
+          </span>
+        </div>
+        <div className="mb-5 text-sm text-gray-500">Sign in to continue.</div>
         <form onSubmit={onSubmit} className="space-y-3">
-          <div>
-            <label className="mb-1 block text-xs font-medium text-slate-700">Email</label>
-            <input
-              type="email"
-              required
-              autoFocus
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-slate-700">Password</label>
-            <input
-              type="password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full rounded border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
-            />
-          </div>
+          <Field
+            label="Email"
+            type="email"
+            value={email}
+            onChange={setEmail}
+            autoFocus
+          />
+          <Field
+            label="Password"
+            type="password"
+            value={password}
+            onChange={setPassword}
+          />
           {error && (
-            <div className="rounded border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
+            <div className="rounded-md border border-neg/30 bg-neg-soft px-3 py-2 text-xs text-neg">
               {error}
             </div>
           )}
-          <button
-            type="submit"
-            disabled={submitting}
-            className="w-full rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
-          >
+          <Button type="submit" disabled={submitting} className="w-full">
             {submitting ? 'Signing in…' : 'Sign in'}
-          </button>
+          </Button>
         </form>
-        <div className="mt-4 text-center text-xs text-slate-500">
-          <Link to="/reset-password" className="hover:underline">
+        <div className="mt-5 text-center text-xs text-gray-500">
+          <Link
+            to="/reset-password"
+            className="text-navy-700 underline-offset-2 hover:text-navy-900 hover:underline"
+          >
             Forgot password?
           </Link>
         </div>
       </div>
+    </div>
+  );
+}
+
+function Field({
+  label,
+  type,
+  value,
+  onChange,
+  autoFocus,
+}: {
+  label: string;
+  type: 'email' | 'password';
+  value: string;
+  onChange: (v: string) => void;
+  autoFocus?: boolean;
+}) {
+  return (
+    <div>
+      <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-gray-500">
+        {label}
+      </label>
+      <input
+        type={type}
+        required
+        autoFocus={autoFocus}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder-gray-400 transition-shadow focus:border-navy-500 focus:outline-none focus:ring-2 focus:ring-navy-200"
+      />
     </div>
   );
 }
