@@ -40,6 +40,7 @@ export type Database = {
           name: string;
           source_type: string;
           is_active: boolean;
+          link: string | null;
           created_at: string;
         };
         Insert: {
@@ -48,6 +49,7 @@ export type Database = {
           name: string;
           source_type: string;
           is_active?: boolean;
+          link?: string | null;
           created_at?: string;
         };
         Update: Partial<Database['public']['Tables']['tf_accounts']['Row']>;

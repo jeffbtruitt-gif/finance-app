@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import { Link, Navigate } from 'react-router-dom';
 import { useAuth } from '@/api/auth';
-import { Brand, Button } from '@/components/ds';
+import { Button } from '@/components/ds';
+
+const LOGO_SRC = `${import.meta.env.BASE_URL}truitt-finance-logo.png`;
 
 export function LoginPage() {
   const { session, signIn } = useAuth();
@@ -34,11 +36,13 @@ export function LoginPage() {
         aria-hidden
       />
       <div className="relative w-full max-w-sm rounded-xl border border-navy-700 bg-white p-7 shadow-xl">
-        <div className="mb-6 flex items-center justify-between">
-          <Brand size="md" />
-          <span className="text-[10px] font-medium uppercase tracking-wider text-gray-400">
-            Family
-          </span>
+        <div className="mb-6 flex justify-center">
+          <img
+            src={LOGO_SRC}
+            alt="Truitt Finance"
+            className="h-auto w-full max-w-[160px] object-contain select-none"
+            draggable={false}
+          />
         </div>
         <div className="mb-5 text-sm text-gray-500">Sign in to continue.</div>
         <form onSubmit={onSubmit} className="space-y-3">

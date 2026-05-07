@@ -166,20 +166,37 @@ export function TransactionsFiltersPanel(props: {
             const on = accountIds.includes(a.id);
             const stripe = accountStripeHex(a.id);
             return (
-              <button
-                key={a.id}
-                type="button"
-                onClick={() => toggleAccount(a.id)}
-                className={
-                  'inline-flex max-w-full items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold transition-colors ' +
-                  (on
-                    ? 'border-navy-800 bg-navy-800 text-white'
-                    : 'border-navy-200 bg-white text-navy-700 hover:bg-navy-50')
-                }
-              >
-                <span className="h-3 w-1 shrink-0 rounded-full" style={{ backgroundColor: stripe }} />
-                <span className="truncate">{a.name}</span>
-              </button>
+              <span key={a.id} className="group relative inline-flex max-w-full items-center">
+                <button
+                  type="button"
+                  onClick={() => toggleAccount(a.id)}
+                  className={
+                    'inline-flex max-w-full items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold transition-colors ' +
+                    (on
+                      ? 'border-navy-800 bg-navy-800 text-white'
+                      : 'border-navy-200 bg-white text-navy-700 hover:bg-navy-50')
+                  }
+                >
+                  <span className="h-3 w-1 shrink-0 rounded-full" style={{ backgroundColor: stripe }} />
+                  <span className="truncate">{a.name}</span>
+                </button>
+                {a.link && (
+                  <a
+                    href={a.link}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title={`Open ${a.name}`}
+                    onClick={(e) => e.stopPropagation()}
+                    className="absolute -right-1 -top-1 hidden rounded-full border border-navy-200 bg-white p-0.5 shadow-sm transition-colors hover:bg-navy-50 group-hover:flex"
+                  >
+                    <svg className="h-3 w-3 text-navy-600" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M6 3H3.5A1.5 1.5 0 0 0 2 4.5v8A1.5 1.5 0 0 0 3.5 14h8a1.5 1.5 0 0 0 1.5-1.5V10" />
+                      <path d="M9 2h5v5" />
+                      <path d="M14 2 7 9" />
+                    </svg>
+                  </a>
+                )}
+              </span>
             );
           })}
         </div>

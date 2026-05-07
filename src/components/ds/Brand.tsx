@@ -3,7 +3,7 @@
  * auth pages. Built per the design system spec:
  *
  *   - 30×30 navy-800 rounded square badge with a gold clock-hand glyph
- *   - "Truitt Family" wordmark (13px / 700 / navy-800)
+ *   - "Truitt" wordmark (13px / 700 / navy-800)
  *   - "FINANCE" subline (10px / 500 / gold-500 / 0.18em uppercase)
  *
  * `size` scales the whole lockup proportionally for use on auth pages.
@@ -44,7 +44,7 @@ export function Brand({ size = 'sm', className = '' }: BrandProps) {
             letterSpacing: '-0.01em',
           }}
         >
-          Truitt Family
+          Truitt
         </div>
         <div
           className="text-gold-500"

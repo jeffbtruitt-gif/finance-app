@@ -403,20 +403,23 @@ export function BudgetEditorPage() {
     <div className="min-w-0 pb-10">
       {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-6">
-        <div className="min-w-0 max-w-[680px]">
-          <div className="flex flex-wrap items-baseline gap-3">
-            <h1 className="text-[26px] font-extrabold tracking-tight text-navy-800">
-              Budget
-            </h1>
-            <span className="rounded-full bg-navy-100 px-2.5 py-1 text-xs font-bold tracking-wide text-navy-700">
-              FY {year}
-            </span>
+        <div className="flex min-w-0 max-w-[680px] items-start gap-3">
+          <div className="mt-1 w-1 self-stretch rounded-full bg-gold-500" aria-hidden />
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-baseline gap-3">
+              <h1 className="text-[26px] font-extrabold tracking-tight text-navy-800">
+                Budget
+              </h1>
+              <span className="rounded-full bg-navy-100 px-2.5 py-1 text-xs font-bold tracking-wide text-navy-700">
+                FY {year}
+              </span>
+            </div>
+            <p className="mt-1.5 text-[13.5px] leading-relaxed text-gray-500">
+              Plan how much you&apos;ll spend by category this year. Tab across months; Enter moves down a
+              row. Enter January first while Feb–Dec are empty to copy across all twelve months, or use{' '}
+              <strong className="font-semibold text-navy-700">Avg</strong> on a row to pull a trailing average.
+            </p>
           </div>
-          <p className="mt-1.5 text-[13.5px] leading-relaxed text-gray-500">
-            Plan how much you&apos;ll spend by category this year. Tab across months; Enter moves down a
-            row. Enter January first while Feb–Dec are empty to copy across all twelve months, or use{' '}
-            <strong className="font-semibold text-navy-700">Avg</strong> on a row to pull a trailing average.
-          </p>
         </div>
         {tweaks.showGrandTotalKpi && (
           <div className="relative min-w-[280px] shrink-0 overflow-hidden rounded-xl bg-navy-800 py-3.5 pl-5 pr-6 text-white shadow-md">

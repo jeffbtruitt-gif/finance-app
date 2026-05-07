@@ -346,16 +346,25 @@ export interface AccountOption {
   name: string;
   source_type: string;
   is_active: boolean;
+  link: string | null;
 }
 
 export async function fetchAccounts(): Promise<AccountOption[]> {
   const { data, error } = await supabase
     .from('tf_accounts')
-    .select('id, name, source_type, is_active')
+    .select('id, name, source_type, is_active, link')
     .eq('is_active', true)
     .order('name');
   if (error) throw error;
   return (data ?? []) as unknown as AccountOption[];
+}
+
+export async function updateAccountLink(accountId: string, link: string | null): Promise<void> {
+  const { error } = await supabase
+    .from('tf_accounts')
+    .update({ link } as never)
+    .eq('id', accountId);
+  if (error) throw error;
 }
 
 export interface CategoryOption {
