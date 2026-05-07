@@ -15,6 +15,7 @@ import { RuleRow } from './RuleRow';
 import { RuleEditor } from './RuleEditor';
 
 type ActiveFilter = 'active' | 'all' | 'disabled';
+const ALL_CATEGORIES = '__all__';
 
 export function RulesPage() {
   const navigate = useNavigate();
@@ -89,12 +90,22 @@ export function RulesPage() {
   const orderedRules = rulesQuery.data ?? [];
   const [search, setSearch] = useState('');
   const [activeFilter, setActiveFilter] = useState<ActiveFilter>('active');
+  const [categoryFilter, setCategoryFilter] = useState(ALL_CATEGORIES);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
 
   const categoryNameById = (id: string) =>
     categoriesQuery.data?.find((c) => c.id === id)?.name ?? '(unknown)';
+
+  const assignedCategoryIds = useMemo(() => {
+    const ids = new Set(orderedRules.map((r) => r.action_category_id));
+    return Array.from(ids).sort((a, b) => {
+      const nameA = categoryNameById(a).toLowerCase();
+      const nameB = categoryNameById(b).toLowerCase();
+      return nameA.localeCompare(nameB);
+    });
+  }, [orderedRules, categoriesQuery.data]);
 
   const matchCountByRule = useMemo(() => {
     const txs = allTxQuery.data;
@@ -119,12 +130,16 @@ export function RulesPage() {
     return orderedRules.filter((r) => {
       if (activeFilter === 'active' && !r.is_active) return false;
       if (activeFilter === 'disabled' && r.is_active) return false;
+      if (categoryFilter !== ALL_CATEGORIES && r.action_category_id !== categoryFilter)
+        return false;
       if (!q) return true;
       if (r.name.toLowerCase().includes(q)) return true;
+      const catName = categoryNameById(r.action_category_id).toLowerCase();
+      if (catName.includes(q)) return true;
       const hay = JSON.stringify(r.conditions).toLowerCase();
       return hay.includes(q);
     });
-  }, [orderedRules, search, activeFilter]);
+  }, [orderedRules, search, activeFilter, categoryFilter, categoriesQuery.data]);
 
   const activeCount = orderedRules.filter((r) => r.is_active).length;
 
@@ -275,6 +290,18 @@ export function RulesPage() {
                     </button>
                   ))}
                 </div>
+                <select
+                  value={categoryFilter}
+                  onChange={(e) => setCategoryFilter(e.target.value)}
+                  className="h-8 rounded-md border border-gray-200 bg-gray-50 px-2 text-[12px] font-medium text-navy-800 focus:border-navy-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-navy-500/20"
+                >
+                  <option value={ALL_CATEGORIES}>All categories</option>
+                  {assignedCategoryIds.map((catId) => (
+                    <option key={catId} value={catId}>
+                      {categoryNameById(catId)}
+                    </option>
+                  ))}
+                </select>
                 <span className="ml-auto font-mono text-[11px] tabular-nums text-gray-500">
                   {filteredRules.length} of {orderedRules.length}
                 </span>

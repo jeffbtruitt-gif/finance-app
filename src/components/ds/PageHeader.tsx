@@ -26,13 +26,16 @@ export function PageHeader({
     <header
       className={`mb-6 flex flex-wrap items-end justify-between gap-3 ${className}`}
     >
-      <div className="min-w-0">
-        <h1 className="text-h1 font-bold tracking-tight text-navy-900">
-          {title}
-        </h1>
-        {subtitle && (
-          <p className="mt-1 text-body-base text-gray-500">{subtitle}</p>
-        )}
+      <div className="flex min-w-0 items-start gap-3">
+        <div className="mt-0.5 w-1 self-stretch rounded-full bg-gold-500" aria-hidden />
+        <div className="min-w-0">
+          <h1 className="text-h1 font-bold tracking-tight text-navy-900">
+            {title}
+          </h1>
+          {subtitle && (
+            <p className="mt-1 text-body-base text-gray-500">{subtitle}</p>
+          )}
+        </div>
       </div>
       {actions && <div className="flex items-center gap-2">{actions}</div>}
     </header>

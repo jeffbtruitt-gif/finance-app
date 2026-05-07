@@ -377,24 +377,27 @@ export function ReforecastPage() {
   return (
     <div className="min-w-0 pb-10">
       <div className="flex flex-wrap items-start justify-between gap-6">
-        <div className="min-w-0 max-w-[680px]">
-          <div className="flex flex-wrap items-baseline gap-3">
-            <h1 className="text-[26px] font-extrabold tracking-tight text-navy-800">Reforecast</h1>
-            <span className="rounded-full bg-navy-100 px-2.5 py-1 text-xs font-bold tracking-wide text-navy-700">
-              FY {year}
-            </span>
-            {!noActualsYet && (
-              <span className="text-xs font-medium text-gray-500">
-                Actuals through {MONTH_NAMES_LONG[asOfMonth - 1]} · Forecasting{' '}
-                {MONTH_NAMES_LONG[firstForecastMonth - 1]}–Dec
+        <div className="flex min-w-0 max-w-[680px] items-start gap-3">
+          <div className="mt-1 w-1 self-stretch rounded-full bg-gold-500" aria-hidden />
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-baseline gap-3">
+              <h1 className="text-[26px] font-extrabold tracking-tight text-navy-800">Reforecast</h1>
+              <span className="rounded-full bg-navy-100 px-2.5 py-1 text-xs font-bold tracking-wide text-navy-700">
+                FY {year}
               </span>
-            )}
+              {!noActualsYet && (
+                <span className="text-xs font-medium text-gray-500">
+                  Actuals through {MONTH_NAMES_LONG[asOfMonth - 1]} · Forecasting{' '}
+                  {MONTH_NAMES_LONG[firstForecastMonth - 1]}–Dec
+                </span>
+              )}
+            </div>
+            <p className="mt-1.5 text-[13.5px] leading-relaxed text-gray-500">
+              Adjust expectations as actuals arrive. Past months are locked to actuals; future months are your
+              forecast. Use <strong className="font-semibold text-navy-700">Fill</strong> on a row for quick
+              updates.
+            </p>
           </div>
-          <p className="mt-1.5 text-[13.5px] leading-relaxed text-gray-500">
-            Adjust expectations as actuals arrive. Past months are locked to actuals; future months are your
-            forecast. Use <strong className="font-semibold text-navy-700">Fill</strong> on a row for quick
-            updates.
-          </p>
         </div>
         {tweaks.showProjectionKpi && !noActualsYet && (
           <div className="relative flex min-w-[360px] shrink-0 items-stretch gap-5 overflow-hidden rounded-xl bg-navy-800 py-3.5 pl-5 pr-6 text-white shadow-md">

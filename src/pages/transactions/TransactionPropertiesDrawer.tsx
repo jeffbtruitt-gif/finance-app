@@ -138,6 +138,7 @@ export function TransactionPropertiesDrawer(props: {
         name: `${row.account_name || 'Account'} (inactive or hidden)`,
         source_type: '',
         is_active: false,
+        link: null,
       });
     }
     return list;

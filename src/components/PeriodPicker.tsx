@@ -22,7 +22,7 @@ export function PeriodPicker({
   for (let y = range.from; y <= range.to; y++) years.push(y);
 
   const selectCls =
-    'rounded-md border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 focus:border-navy-500 focus:outline-none focus:ring-2 focus:ring-navy-200';
+    'rounded-md border border-navy-200 bg-white px-3 py-1.5 text-sm font-semibold tabular-nums text-navy-800 shadow-sm focus:border-navy-400 focus:outline-none focus:ring-2 focus:ring-navy-300';
 
   return (
     <div className={`inline-flex items-center gap-2 ${className}`}>

@@ -7,9 +7,8 @@
  *   - Are we on budget this month / YTD?  (spend vs budget cards)
  *   - Income / savings / tax / expense shape from Assumptions (waterfalls).
  *   - Where does net worth stand?         (net worth card + 24-mo line)
- *   - When can we stop working?           (FI multiplier card)
  *
- * Plus a small free-text Goals list so the dashboard surfaces the family's
+ * Plus a small free-text Goals list so the dashboard surfaces the
  * *why*, not just the numbers.
  */
 
@@ -68,17 +67,6 @@ import {
   sumSpendBudgetYearTotal,
 } from '@/features/budget/reforecastProjectedGrand';
 
-/**
- * Equity groups whose effective values count as "investable" for the FI
- * multiplier. House and Car are explicitly excluded — the master plan's
- * spreadsheet treats only liquid + retirement assets as the FI base.
- */
-const INVESTABLE_GROUPS = new Set([
-  'Retirement',
-  'Investments',
-  'Savings',
-  'Credit Union',
-]);
 
 /** Spend-group axis labels (aligned with reports / grouping canonical names). */
 const DASHBOARD_SPEND_GROUP_LABEL: Record<SpendGroup, string> = {
@@ -300,16 +288,6 @@ export function DashboardPage() {
     const prior = totalAt(priorIso);
     const soy = totalAt(startOfYearIso);
 
-    const eff = effectiveValuesAt(values, curIso);
-    let investable = 0;
-    for (const it of items) {
-      if (!it.is_active) continue;
-      if (it.type !== 'asset') continue;
-      if (!it.equity_group || !INVESTABLE_GROUPS.has(it.equity_group)) continue;
-      const v = eff.get(it.id);
-      if (v != null) investable += v;
-    }
-
     const series = netWorthSeries({
       items,
       values,
@@ -317,7 +295,7 @@ export function DashboardPage() {
       count: 24,
     });
 
-    return { cur, prior, soy, investable, series };
+    return { cur, prior, soy, series };
   }, [items, values, thisMonth]);
 
   const loading =
@@ -523,10 +501,7 @@ export function DashboardPage() {
           />
 
           {nw && (
-            <>
-              <NetWorthCard nw={nw} thisMonth={thisMonth} />
-              <FiCard t12Spend={calc?.t12Sums.spend ?? 0} investable={nw.investable} />
-            </>
+            <NetWorthCard nw={nw} thisMonth={thisMonth} />
           )}
 
           <GoalsCard
@@ -683,7 +658,6 @@ interface NetWorthSummary {
   cur: { assets: number; liab: number; net: number };
   prior: { assets: number; liab: number; net: number };
   soy: { assets: number; liab: number; net: number };
-  investable: number;
   series: ReturnType<typeof netWorthSeries>;
 }
 
@@ -776,66 +750,6 @@ function NetWorthCard({ nw, thisMonth }: { nw: NetWorthSummary; thisMonth: Perio
   );
 }
 
-function FiCard({ t12Spend, investable }: { t12Spend: number; investable: number }) {
-  const { hideIncomeAssets } = usePrivacyMode();
-  // 25× spend FI metric. Multiplier = investable / (annual_spend × 25).
-  // ≥ 1.0 = financial independence; ≥ 0.25 = "Coast FI" rule of thumb.
-  const target = t12Spend * 25;
-  const multiplier = target > 0 ? investable / target : null;
-  const pct = multiplier != null ? Math.min(multiplier, 1) * 100 : 0;
-
-  // Use gold accent for the FI card — this is the "north-star" KPI.
-  return (
-    <Card className="border-gold-300 bg-gold-100/40">
-      <div className="flex items-baseline justify-between">
-        <div>
-          <div className="text-label uppercase text-gold-600">FI Multiplier</div>
-          <div className="mt-0.5 text-caption text-gray-600">
-            25× trailing-12 spend · investable assets only
-          </div>
-        </div>
-        {!hideIncomeAssets && multiplier != null && multiplier >= 1 && (
-          <Badge tone="gold" dot>
-            FI achieved
-          </Badge>
-        )}
-      </div>
-      <div className="mt-3 flex items-baseline justify-between gap-2">
-        <div>
-          <div className="text-[10px] uppercase tracking-wider text-gray-500">
-            Multiplier
-          </div>
-          <div className="text-3xl font-bold tabular-nums text-navy-900">
-            {hideIncomeAssets
-              ? PRIVACY_TEXT_PLACEHOLDER
-              : multiplier != null
-                ? `${(multiplier * 100).toFixed(1)}%`
-                : '—'}
-          </div>
-        </div>
-        <div className="text-right text-xs text-gray-600">
-          <div className="text-gray-500">Investable</div>
-          <div className="tabular-nums text-navy-800">
-            {maskUsd(hideIncomeAssets, investable, true)}
-          </div>
-          <div className="mt-1 text-gray-500">Target (25×)</div>
-          <div className="tabular-nums text-navy-800">
-            {maskUsd(hideIncomeAssets, target, true)}
-          </div>
-        </div>
-      </div>
-      <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-white">
-        <div
-          className={`h-full ${hideIncomeAssets ? 'bg-gray-300' : 'bg-gold-500'}`}
-          style={{ width: `${hideIncomeAssets ? 0 : Math.max(2, pct)}%` }}
-        />
-      </div>
-      <div className="mt-1 text-xs text-gray-600">
-        Annual spend (T12): {fmtUsd(t12Spend)}
-      </div>
-    </Card>
-  );
-}
 
 function GoalsCard({
   goals,

@@ -38,6 +38,7 @@ import type {
   SourceType,
 } from '../types/phase2';
 import { Badge, Button, Card } from '@/components/ds';
+import { AccountLinksPanel } from '@/components/AccountLinksPanel';
 
 /**
  * Import page (/import) — multi-file edition.
@@ -1034,7 +1035,10 @@ export function ImportPage() {
   const confirmCommitFiles = dupPanelFiles;
 
   return (
-    <div className="mx-auto max-w-6xl">
+    <div className="flex gap-0">
+      <AccountLinksPanel />
+      <div className="min-w-0 flex-1">
+      <div className="mx-auto max-w-6xl">
       <div className="mb-4 flex flex-wrap gap-1 border-b border-navy-100">
         <ImportTabButton active={pageTab === 'import'} onClick={() => setPageTab('import')}>
           Import
@@ -1335,6 +1339,8 @@ export function ImportPage() {
           queryClient={queryClient}
         />
       )}
+    </div>
+    </div>
     </div>
   );
 }

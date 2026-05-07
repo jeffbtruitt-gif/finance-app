@@ -358,22 +358,25 @@ export function BudgetReportMatrixPage() {
   return (
     <div className="min-w-0 pb-10">
       <div className="flex flex-wrap items-start justify-between gap-6">
-        <div className="min-w-0 max-w-[680px]">
-          <div className="flex flex-wrap items-baseline gap-3">
-            <h1 className="text-[26px] font-extrabold tracking-tight text-navy-800">Budget report</h1>
-            <span className="rounded-full bg-navy-100 px-2.5 py-1 text-xs font-bold tracking-wide text-navy-700">
-              FY {year}
-            </span>
-            {asOfMonth > 0 && (
-              <span className="text-xs font-medium text-gray-500">
-                Read-only · YTD through {MONTHS[asOfMonth - 1]}
+        <div className="flex min-w-0 max-w-[680px] items-start gap-3">
+          <div className="mt-1 w-1 self-stretch rounded-full bg-gold-500" aria-hidden />
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-baseline gap-3">
+              <h1 className="text-[26px] font-extrabold tracking-tight text-navy-800">Budget report</h1>
+              <span className="rounded-full bg-navy-100 px-2.5 py-1 text-xs font-bold tracking-wide text-navy-700">
+                FY {year}
               </span>
-            )}
+              {asOfMonth > 0 && (
+                <span className="text-xs font-medium text-gray-500">
+                  Read-only · YTD through {MONTHS[asOfMonth - 1]}
+                </span>
+              )}
+            </div>
+            <p className="mt-1.5 text-[13.5px] leading-relaxed text-gray-500">
+              Compare plan vs reality across the year. Switch metrics for actuals, budget, your latest
+              reforecast, or variance heatmaps.
+            </p>
           </div>
-          <p className="mt-1.5 text-[13.5px] leading-relaxed text-gray-500">
-            Compare plan vs reality across the year. Switch metrics for actuals, budget, your latest
-            reforecast, or variance heatmaps.
-          </p>
         </div>
         <div className="relative min-w-[320px] shrink-0 overflow-hidden rounded-xl bg-navy-800 py-3.5 pl-5 pr-6 text-white shadow-md">
           <div className="absolute bottom-0 left-0 top-0 w-1 bg-gold-500" aria-hidden />

@@ -182,7 +182,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       >
         {/* Logo — fixed at top center while nav scrolls */}
         <div
-          className="flex justify-center border-b border-navy-100 bg-white px-2 py-1"
+          className="flex justify-center bg-white px-2 py-1"
           style={{ flexShrink: 0 }}
         >
           <img
@@ -266,22 +266,25 @@ export function AppShell({ children }: { children: ReactNode }) {
 
       <main className="flex min-h-0 min-w-0 flex-1 flex-col">
         <header className="sticky top-0 z-30 shrink-0 border-b border-navy-100 bg-white shadow-sm">
-          <div className="flex flex-wrap items-start justify-between gap-4 px-5 py-4 md:px-6">
-            <div className="min-w-0 flex-1">
-              <h1 className="text-h1 font-bold tracking-tight text-navy-900">{pageMeta.title}</h1>
-              {pageMeta.description ? (
-                <p className="mt-1 max-w-3xl text-body-base text-gray-500">{pageMeta.description}</p>
-              ) : null}
+          <div className="flex flex-wrap items-start justify-between gap-4 px-3 py-4 md:px-4">
+            <div className="flex min-w-0 flex-1 items-start gap-3">
+              <div className="mt-0.5 w-1 self-stretch rounded-full bg-gold-500" aria-hidden />
+              <div className="min-w-0">
+                <h1 className="text-h1 font-bold tracking-tight text-navy-900">{pageMeta.title}</h1>
+                {pageMeta.description ? (
+                  <p className="mt-1 max-w-3xl text-body-base text-gray-500">{pageMeta.description}</p>
+                ) : null}
+              </div>
             </div>
             <div className="flex shrink-0 flex-wrap items-end justify-end gap-3 md:gap-4">
-              <label className="flex flex-col gap-0.5">
+              <label className="flex flex-col gap-1">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">
                   Period
                 </span>
-                <div className="flex items-center gap-0.5">
+                <div className="flex items-center gap-1">
                   <button
                     type="button"
-                    className="rounded-md border border-navy-200 bg-white p-1.5 text-navy-700 shadow-sm hover:bg-navy-50 focus:border-navy-400 focus:outline-none focus:ring-2 focus:ring-navy-300"
+                    className="flex h-8 w-8 items-center justify-center rounded-md text-navy-600 transition-colors hover:bg-navy-50 hover:text-navy-800 focus:outline-none focus:ring-2 focus:ring-navy-300"
                     aria-label="Previous month"
                     title="Previous month"
                     onClick={() => {
@@ -301,12 +304,12 @@ export function AppShell({ children }: { children: ReactNode }) {
                       if (!Number.isFinite(y) || !Number.isFinite(m)) return;
                       setYearMonth(y, m);
                     }}
-                    className="min-w-[10.5rem] rounded-md border border-navy-200 bg-white px-2 py-1.5 text-sm font-semibold tabular-nums text-navy-800 shadow-sm focus:border-navy-400 focus:outline-none focus:ring-2 focus:ring-navy-300"
+                    className="min-w-[10rem] rounded-md border border-navy-200 bg-white px-3 py-1.5 text-sm font-semibold tabular-nums text-navy-800 shadow-sm focus:border-navy-400 focus:outline-none focus:ring-2 focus:ring-navy-300"
                     aria-label="Reporting month"
                   />
                   <button
                     type="button"
-                    className="rounded-md border border-navy-200 bg-white p-1.5 text-navy-700 shadow-sm hover:bg-navy-50 focus:border-navy-400 focus:outline-none focus:ring-2 focus:ring-navy-300"
+                    className="flex h-8 w-8 items-center justify-center rounded-md text-navy-600 transition-colors hover:bg-navy-50 hover:text-navy-800 focus:outline-none focus:ring-2 focus:ring-navy-300"
                     aria-label="Next month"
                     title="Next month"
                     onClick={() => {
@@ -355,7 +358,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
         </header>
         <div
-          className={`min-h-0 flex-1 overflow-y-auto ${reportsFullBleed ? 'p-0' : 'py-6 pl-4 pr-6 md:pl-5'}`}
+          className={`min-h-0 flex-1 overflow-y-auto ${reportsFullBleed ? 'p-0' : 'py-6 px-3 md:px-4'}`}
         >
           {children}
         </div>

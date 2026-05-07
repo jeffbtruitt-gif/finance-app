@@ -1,17 +1,14 @@
 /**
- * Retirement page — Phase 7.
+ * Retirement page — Phase 7 (tabbed layout).
  *
  * Route: /retire
  *
- * Replaces the spreadsheet's "Retire" + "Retire Graph" tabs. Sections:
- *
- *   1. Header — title + "money lasts" callout (forever / runs out at age X).
- *   2. Starting balance + annual retirement spend (reforecast with exclusions
- *      or manual), then other pinned inputs (contrib, return, SS, ages, tax).
- *   3. FI multiplier card — same metric the dashboard shows (25× T12 spend),
- *      promoted to its own card here as the master plan calls for.
- *   4. Retire fan chart — 6-rate accumulation projection through retire year.
- *   5. Year-by-year projection table — full sequence-of-returns detail.
+ * Three tabs:
+ *   Inputs      — starting balance, annual spend, pinned inputs, outputs KPIs.
+ *   Projection  — year-by-year sequence-of-returns table.
+ *   Dashboard   — horizontal bar charts showing projected balances at
+ *                 various return rates for Jeff's default retire age and two
+ *                 earlier what-if ages (retire age − 10, retire age − 5).
  *
  * Balance sheet slice for starting balance uses the app header month
  * (`useAppPeriod`). Year nav for the projection is still the header year;
@@ -26,7 +23,6 @@ import { useAppPeriod } from '@/lib/appPeriodContext';
 import {
   defaultSchemeQueryKey,
   fetchDefaultSchemeId,
-  fetchMonthlyActuals,
   fetchSchemeCategories,
   type ReportCategory,
 } from '@/api/reports';
@@ -88,24 +84,22 @@ import {
   SPEND_GROUP_ORDER,
   type SpendGroup,
 } from '@/features/reports/grouping';
-import {
-  DEFAULT_FAN_RATES,
-  buildFanChart,
-} from '@/features/retire/fanChart';
-import { FanChart } from '@/components/FanChart';
+import { buildFanChart } from '@/features/retire/fanChart';
 import { StatusPanel } from '@/components/StatusPanel';
 import { fmtUsd, fmtPct } from '@/lib/money';
 import { formatPeriod, type Period } from '@/lib/period';
 import { sumByGroup } from '@/api/dashboard';
 import { Badge, Button, Card as DsCard, RT } from '@/components/ds';
 
-// Same investable-asset filter as the Dashboard (FI multiplier card).
-const INVESTABLE_GROUPS = new Set([
-  'Retirement',
-  'Investments',
-  'Savings',
-  'Credit Union',
-]);
+const PROJECTION_RATES = [0.02, 0.04, 0.06, 0.08, 0.10, 0.12] as const;
+
+type RetireTab = 'inputs' | 'projection' | 'dashboard';
+
+const TABS: { id: RetireTab; label: string }[] = [
+  { id: 'inputs', label: 'Inputs' },
+  { id: 'projection', label: 'Projection' },
+  { id: 'dashboard', label: 'Dashboard' },
+];
 
 // ----------------------------------------------------------------------------
 // Input parsing helpers
@@ -144,6 +138,7 @@ export function RetirePage() {
   const { period } = useAppPeriod();
   const currentYear = period.year;
   const monthsLeft = Math.max(0, 12 - period.month);
+  const [activeTab, setActiveTab] = useState<RetireTab>('inputs');
 
   // ---- Queries ----------------------------------------------------------
 
@@ -182,37 +177,6 @@ export function RetirePage() {
     enabled: !!household?.id,
     queryFn: () =>
       fetchAllRevisedForYear({ household_id: household!.id, year: period.year }),
-  });
-
-  // T12 actuals for the FI multiplier card (mirrors Dashboard logic).
-  const t12FromMonth = useMemo(() => {
-    let m = period.month - 11;
-    let y = period.year;
-    while (m < 1) {
-      m += 12;
-      y -= 1;
-    }
-    return { year: y, month: m };
-  }, [period]);
-
-  const actualsQ = useQuery({
-    queryKey: [
-      'retire-t12-actuals',
-      household?.id,
-      schemeQ.data,
-      t12FromMonth.year,
-      t12FromMonth.month,
-      period.year,
-      period.month,
-    ],
-    enabled: !!household?.id && !!schemeQ.data,
-    queryFn: () =>
-      fetchMonthlyActuals({
-        household_id: household!.id,
-        scheme_id: schemeQ.data!,
-        from: t12FromMonth,
-        to: period,
-      }),
   });
 
   // ---- Loading / error gates --------------------------------------------
@@ -283,64 +247,6 @@ export function RetirePage() {
     [retireRows, resolvedStartingBalance, resolvedRetireSpend],
   );
 
-  const investableAssetIds = useMemo(() => {
-    const items = itemsQ.data ?? [];
-    return items
-      .filter(
-        (it) =>
-          it.is_active &&
-          it.type === 'asset' &&
-          it.equity_group &&
-          INVESTABLE_GROUPS.has(it.equity_group),
-      )
-      .map((it) => it.id);
-  }, [itemsQ.data]);
-
-  // Investable assets — FI multiplier card + quick-select for starting balance.
-  const investable = useMemo(() => {
-    let sum = 0;
-    for (const id of investableAssetIds) {
-      const v = effectiveBs.get(id);
-      if (v != null) sum += v;
-    }
-    return sum;
-  }, [investableAssetIds, effectiveBs]);
-
-  const t12Spend = useMemo(() => {
-    if (!actualsQ.data || !schemeQ.data) return 0;
-    // Build the period array: T12 ending at current period.
-    const periods: { year: number; month: number }[] = [];
-    let y = t12FromMonth.year;
-    let m = t12FromMonth.month;
-    for (let i = 0; i < 12; i++) {
-      periods.push({ year: y, month: m });
-      m += 1;
-      if (m > 12) {
-        m = 1;
-        y += 1;
-      }
-    }
-    // sumByGroup needs categories; we don't have them here. Quick path: sum
-    // every actual row's total. The view tf_v_monthly_category_actuals already
-    // filters to spend categories at the SQL level (via the join in the view
-    // definition — but we don't actually know that here, so sum and trust).
-    // Safer: only sum non-negative totals (spend is stored positive; income
-    // negative). Matches the convention at sumByGroup.
-    const periodKeys = new Set(
-      periods.map((p) => `${p.year}-${String(p.month).padStart(2, '0')}`),
-    );
-    let total = 0;
-    for (const r of actualsQ.data) {
-      const key = `${r.year}-${String(r.month).padStart(2, '0')}`;
-      if (!periodKeys.has(key)) continue;
-      if (r.total > 0) total += r.total;
-    }
-    // Subtract any negatives (income / refunds) — handled by the >0 filter.
-    // sumByGroup is what the dashboard uses but it groups by category which
-    // we don't need here. The simple sum mirrors the grand-total it produces.
-    return total;
-  }, [actualsQ.data, schemeQ.data, t12FromMonth]);
-
   // Suppress the unused-import warning for sumByGroup; we keep the import as
   // a future hook (when we want per-category breakdown on this page).
   void sumByGroup;
@@ -356,34 +262,35 @@ export function RetirePage() {
     [inputs, currentYear, monthsLeft],
   );
 
-  const retireYear = useMemo(
-    () => inputs.jeff_birth_year + inputs.jeff_retire_age,
-    [inputs.jeff_birth_year, inputs.jeff_retire_age],
-  );
+  // ---- Dashboard chart data (accumulation-only at various rates & ages) --
 
-  const fanSeries = useMemo(() => {
-    const yearlyContrib = inputs.jeff_yearly_contrib + inputs.brit_yearly_contrib;
-    return buildFanChart({
-      startingBalance: inputs.starting_balance,
-      yearlyContrib,
-      monthsLeftInFirstYear: monthsLeft || 12,
-      startYear: currentYear,
-      // Project at least 5 years out so a brand-new household with no
-      // retire age set still shows something meaningful. Cap at 60 years
-      // forward to keep the chart legible.
-      endYear: Math.min(
-        Math.max(retireYear, currentYear + 5),
-        currentYear + 60,
-      ),
+  const jeffRetireAge = inputs.jeff_retire_age;
+  const jeffBirthYear = inputs.jeff_birth_year;
+  const yearlyContrib = inputs.jeff_yearly_contrib + inputs.brit_yearly_contrib;
+
+  const dashboardCharts = useMemo(() => {
+    const ages = [jeffRetireAge - 10, jeffRetireAge - 5, jeffRetireAge];
+    return ages.map((age) => {
+      const retireYr = jeffBirthYear + age;
+      const series = buildFanChart({
+        startingBalance: inputs.starting_balance,
+        yearlyContrib,
+        monthsLeftInFirstYear: monthsLeft || 12,
+        startYear: currentYear,
+        endYear: Math.max(retireYr, currentYear + 1),
+        rates: PROJECTION_RATES,
+      });
+      const lastPoint = series.points[series.points.length - 1];
+      return {
+        age,
+        retireYear: retireYr,
+        bars: PROJECTION_RATES.map((rate) => ({
+          rate,
+          balance: lastPoint?.byRate.get(rate) ?? 0,
+        })),
+      };
     });
-  }, [
-    inputs.jeff_yearly_contrib,
-    inputs.brit_yearly_contrib,
-    inputs.starting_balance,
-    monthsLeft,
-    currentYear,
-    retireYear,
-  ]);
+  }, [jeffRetireAge, jeffBirthYear, inputs.starting_balance, yearlyContrib, monthsLeft, currentYear]);
 
   // ---- Mutation helper --------------------------------------------------
 
@@ -402,7 +309,6 @@ export function RetirePage() {
     qc.invalidateQueries({ queryKey: ['retire-inputs', household.id] });
   }
 
-  /** Writes selected BS item ids; on first switch from legacy-only → composition, carries legacy `starting_balance` into extra so the total stays the same. */
   async function persistBsStartIds(nextIds: string[]) {
     if (!household) return;
     const rowsSnapshot = retireRows;
@@ -514,158 +420,233 @@ export function RetirePage() {
         <MoneyLastsBadge summary={summary} />
       </div>
 
-      <section className="grid grid-cols-1 gap-4 md:grid-cols-3">
-        <KpiCard
-          title="Money at retire age"
-          subtitle={`End of ${summary.laterRetireStartYear - 1} — before the later retirement in ${summary.laterRetireStartYear}`}
-        >
-          <div className="text-3xl font-bold tabular-nums text-navy-900">
-            {summary.moneyAtRetireAge == null
-              ? '—'
-              : fmtUsd(summary.moneyAtRetireAge)}
-          </div>
-        </KpiCard>
-        <KpiCard
-          title="Retirement starting balance"
-          subtitle="Checked balance sheet assets plus manual adjustment (or legacy total if not linked)"
-        >
-          <div className="text-3xl font-bold tabular-nums text-navy-900">
-            {fmtUsd(resolvedStartingBalance)}
-          </div>
-        </KpiCard>
-        <FiCard t12Spend={t12Spend} investable={investable} />
-      </section>
+      {/* Tab bar */}
+      <div className="flex gap-1 border-b border-navy-200">
+        {TABS.map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            onClick={() => setActiveTab(tab.id)}
+            className={`px-4 py-2 text-sm font-semibold transition-colors ${
+              activeTab === tab.id
+                ? 'border-b-2 border-navy-700 text-navy-900'
+                : 'text-gray-500 hover:text-navy-700'
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
 
-      <StartingBalanceSection
-        rows={retireRows}
-        items={itemsQ.data ?? []}
-        effective={effectiveBs}
-        period={period}
-        resolvedTotal={resolvedStartingBalance}
-        selectedIds={selectedBsIds}
-        onToggleBsId={async (id) => {
-          const next = selectedBsIds.includes(id)
-            ? selectedBsIds.filter((x) => x !== id)
-            : [...selectedBsIds, id];
-          await persistBsStartIds(next);
-        }}
-        onCommitExtra={(n) => commitStartExtra(n)}
-        onClearComposition={() => clearStartComposition()}
-        onCommitLegacy={async (n) => {
-          if (!household) return;
-          if (n == null || !Number.isFinite(n)) {
-            await deleteRetireInput({
-              household_id: household.id,
-              key: RETIRE_LEGACY_STARTING_BALANCE_KEY,
-            });
-          } else {
-            await upsertRetireInput({
-              household_id: household.id,
-              key: RETIRE_LEGACY_STARTING_BALANCE_KEY,
-              value: n,
-            });
-          }
-          await invalidateRetireInputs();
-        }}
-      />
+      {/* ───── Inputs tab ───── */}
+      {activeTab === 'inputs' && (
+        <>
+          <section className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <KpiCard
+              title="Money at retire age"
+              subtitle={`End of ${summary.laterRetireStartYear - 1} — before the later retirement in ${summary.laterRetireStartYear}`}
+            >
+              <div className="text-3xl font-bold tabular-nums text-navy-900">
+                {summary.moneyAtRetireAge == null
+                  ? '—'
+                  : fmtUsd(summary.moneyAtRetireAge)}
+              </div>
+            </KpiCard>
+            <KpiCard
+              title="Retirement starting balance"
+              subtitle="Checked balance sheet assets plus manual adjustment (or legacy total if not linked)"
+            >
+              <div className="text-3xl font-bold tabular-nums text-navy-900">
+                {fmtUsd(resolvedStartingBalance)}
+              </div>
+            </KpiCard>
+          </section>
 
-      <RetireSpendSection
-        year={currentYear}
-        rows={retireRows}
-        spendCategories={spendCategories}
-        latestReforecastRows={latestReforecastRows}
-        resolvedAnnualSpend={resolvedRetireSpend}
-        onToggleCategoryExcluded={async (categoryId) => {
-          const ex = parseRetireSpendExcludedIds(retireRows);
-          if (ex.has(categoryId)) ex.delete(categoryId);
-          else ex.add(categoryId);
-          await persistSpendExcluded(ex);
-        }}
-        onClearSpendExclusions={async () => {
-          if (!household) return;
-          await deleteRetireInput({
-            household_id: household.id,
-            key: RETIRE_SPEND_EXCLUDED_CATEGORY_IDS_KEY,
-          });
-          await invalidateRetireInputs();
-        }}
-        onCommitManual={(n) => commitLegacyRetireSpend(n)}
-        onCommitSpendExtra={(n) => commitRetireSpendExtra(n)}
-      />
+          <StartingBalanceSection
+            rows={retireRows}
+            items={itemsQ.data ?? []}
+            effective={effectiveBs}
+            period={period}
+            resolvedTotal={resolvedStartingBalance}
+            selectedIds={selectedBsIds}
+            onToggleBsId={async (id) => {
+              const next = selectedBsIds.includes(id)
+                ? selectedBsIds.filter((x) => x !== id)
+                : [...selectedBsIds, id];
+              await persistBsStartIds(next);
+            }}
+            onCommitExtra={(n) => commitStartExtra(n)}
+            onClearComposition={() => clearStartComposition()}
+            onCommitLegacy={async (n) => {
+              if (!household) return;
+              if (n == null || !Number.isFinite(n)) {
+                await deleteRetireInput({
+                  household_id: household.id,
+                  key: RETIRE_LEGACY_STARTING_BALANCE_KEY,
+                });
+              } else {
+                await upsertRetireInput({
+                  household_id: household.id,
+                  key: RETIRE_LEGACY_STARTING_BALANCE_KEY,
+                  value: n,
+                });
+              }
+              await invalidateRetireInputs();
+            }}
+          />
 
-      <DsCard padded={false}>
-        <DsCard.Header title="Inputs" />
-        <div className="grid grid-cols-1 gap-x-6 gap-y-2 p-4 md:grid-cols-2 lg:grid-cols-3">
-          {PINNED_RETIRE_KEYS.map((k) => (
-            <RetireInputRow
-              key={k}
-              k={k}
-              kind={RETIRE_KEY_KINDS[k]}
-              label={RETIRE_KEY_LABELS[k]}
-              value={inputs[k]}
-              onCommit={(v) => commitInput(k, v)}
-            />
-          ))}
-        </div>
-      </DsCard>
+          <RetireSpendSection
+            year={currentYear}
+            rows={retireRows}
+            spendCategories={spendCategories}
+            latestReforecastRows={latestReforecastRows}
+            resolvedAnnualSpend={resolvedRetireSpend}
+            onToggleCategoryExcluded={async (categoryId) => {
+              const ex = parseRetireSpendExcludedIds(retireRows);
+              if (ex.has(categoryId)) ex.delete(categoryId);
+              else ex.add(categoryId);
+              await persistSpendExcluded(ex);
+            }}
+            onClearSpendExclusions={async () => {
+              if (!household) return;
+              await deleteRetireInput({
+                household_id: household.id,
+                key: RETIRE_SPEND_EXCLUDED_CATEGORY_IDS_KEY,
+              });
+              await invalidateRetireInputs();
+            }}
+            onCommitManual={(n) => commitLegacyRetireSpend(n)}
+            onCommitSpendExtra={(n) => commitRetireSpendExtra(n)}
+          />
 
-      <DsCard padded={false}>
-        <DsCard.Header
-          title="Outputs"
-          subtitle="Key outcomes from the projection with your current inputs."
-        />
-        <div className="divide-y divide-navy-100">
-          <div className="flex items-center justify-between gap-4 px-4 py-3 text-sm">
-            <span className="text-gray-700">Money lasts</span>
-            <span className="font-semibold text-navy-900">
-              {summary.moneyLasts === 'Forever' ? 'Forever' : `${summary.moneyLasts} years`}
-            </span>
-          </div>
-          <div className="px-4 py-3">
-            <div className="flex items-center justify-between gap-4 text-sm">
-              <span className="text-gray-700">Money at retire age</span>
-              <span className="font-semibold tabular-nums text-navy-900">
-                {summary.moneyAtRetireAge == null ? '—' : fmtUsd(summary.moneyAtRetireAge)}
-              </span>
+          <DsCard padded={false}>
+            <DsCard.Header title="Inputs" />
+            <div className="grid grid-cols-1 gap-x-6 gap-y-2 p-4 md:grid-cols-2 lg:grid-cols-3">
+              {PINNED_RETIRE_KEYS.map((k) => (
+                <RetireInputRow
+                  key={k}
+                  k={k}
+                  kind={RETIRE_KEY_KINDS[k]}
+                  label={RETIRE_KEY_LABELS[k]}
+                  value={inputs[k]}
+                  onCommit={(v) => commitInput(k, v)}
+                />
+              ))}
             </div>
-            <p className="mt-1 text-caption text-gray-500">
-              Balance at end of {summary.laterRetireStartYear - 1}, the calendar year before the{' '}
-              <span className="font-medium text-gray-700">later</span> of Jeff or Brit reaches retire age (
-              {summary.laterRetireStartYear}).
-            </p>
-          </div>
-          <div className="bg-navy-50/60 px-4 py-2 text-[11px] font-semibold uppercase tracking-wider text-gray-600">
-            Age when money runs out
-          </div>
-          <div className="flex items-center justify-between gap-4 px-4 py-3 text-sm">
-            <span className="text-gray-700">Jeff</span>
-            <span className="font-semibold tabular-nums text-navy-900">
-              {summary.jeffRunsOutAge === 'Never' ? 'Never' : summary.jeffRunsOutAge}
-            </span>
-          </div>
-          <div className="flex items-center justify-between gap-4 px-4 py-3 text-sm">
-            <span className="text-gray-700">Brit</span>
-            <span className="font-semibold tabular-nums text-navy-900">
-              {summary.britRunsOutAge === 'Never' ? 'Never' : summary.britRunsOutAge}
-            </span>
+          </DsCard>
+
+          <DsCard padded={false}>
+            <DsCard.Header
+              title="Outputs"
+              subtitle="Key outcomes from the projection with your current inputs."
+            />
+            <div className="divide-y divide-navy-100">
+              <div className="flex items-center justify-between gap-4 px-4 py-3 text-sm">
+                <span className="text-gray-700">Money lasts</span>
+                <span className="font-semibold text-navy-900">
+                  {summary.moneyLasts === 'Forever' ? 'Forever' : `${summary.moneyLasts} years`}
+                </span>
+              </div>
+              <div className="px-4 py-3">
+                <div className="flex items-center justify-between gap-4 text-sm">
+                  <span className="text-gray-700">Money at retire age</span>
+                  <span className="font-semibold tabular-nums text-navy-900">
+                    {summary.moneyAtRetireAge == null ? '—' : fmtUsd(summary.moneyAtRetireAge)}
+                  </span>
+                </div>
+                <p className="mt-1 text-caption text-gray-500">
+                  Balance at end of {summary.laterRetireStartYear - 1}, the calendar year before the{' '}
+                  <span className="font-medium text-gray-700">later</span> of Jeff or Brit reaches retire age (
+                  {summary.laterRetireStartYear}).
+                </p>
+              </div>
+              <div className="bg-navy-50/60 px-4 py-2 text-[11px] font-semibold uppercase tracking-wider text-gray-600">
+                Age when money runs out
+              </div>
+              <div className="flex items-center justify-between gap-4 px-4 py-3 text-sm">
+                <span className="text-gray-700">Jeff</span>
+                <span className="font-semibold tabular-nums text-navy-900">
+                  {summary.jeffRunsOutAge === 'Never' ? 'Never' : summary.jeffRunsOutAge}
+                </span>
+              </div>
+              <div className="flex items-center justify-between gap-4 px-4 py-3 text-sm">
+                <span className="text-gray-700">Brit</span>
+                <span className="font-semibold tabular-nums text-navy-900">
+                  {summary.britRunsOutAge === 'Never' ? 'Never' : summary.britRunsOutAge}
+                </span>
+              </div>
+            </div>
+          </DsCard>
+        </>
+      )}
+
+      {/* ───── Projection tab ───── */}
+      {activeTab === 'projection' && (
+        <DsCard padded={false}>
+          <DsCard.Header
+            title={`Year-by-year projection (${(inputs.return_rate * 100).toFixed(1)}% return, ${(inputs.retire_tax_rate * 100).toFixed(0)}% tax)`}
+            subtitle={`${projection.rows.length} years`}
+          />
+          <RetireTable rows={projection.rows} firstNegIdx={summary.firstNegativeIndex} />
+        </DsCard>
+      )}
+
+      {/* ───── Dashboard tab ───── */}
+      {activeTab === 'dashboard' && (
+        <div className="space-y-6">
+          <DsCard padded={false}>
+            <DsCard.Header title="Inputs" subtitle="Changes here sync with the Inputs tab." />
+            <div className="grid grid-cols-1 gap-x-6 gap-y-2 p-4 md:grid-cols-2 lg:grid-cols-3">
+              {PINNED_RETIRE_KEYS.map((k) => (
+                <RetireInputRow
+                  key={k}
+                  k={k}
+                  kind={RETIRE_KEY_KINDS[k]}
+                  label={RETIRE_KEY_LABELS[k]}
+                  value={inputs[k]}
+                  onCommit={(v) => commitInput(k, v)}
+                />
+              ))}
+            </div>
+          </DsCard>
+
+          <DsCard>
+            <div className="text-h4 text-navy-800">
+              Proj Retirement Balances by Return Rate (Age {jeffRetireAge})
+            </div>
+            <div className="mt-0.5 text-caption text-gray-500">
+              Starting balance {fmtUsd(inputs.starting_balance)} + {fmtUsd(yearlyContrib)}/yr contributions, no spending
+            </div>
+            <div className="mt-4">
+              <HorizontalBarChart bars={dashboardCharts[2].bars} large />
+            </div>
+          </DsCard>
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <DsCard>
+              <div className="text-h4 text-navy-800">
+                Retire at {dashboardCharts[0].age}
+              </div>
+              <div className="mt-0.5 text-caption text-gray-500">
+                {currentYear} → {dashboardCharts[0].retireYear}
+              </div>
+              <div className="mt-4">
+                <HorizontalBarChart bars={dashboardCharts[0].bars} />
+              </div>
+            </DsCard>
+            <DsCard>
+              <div className="text-h4 text-navy-800">
+                Retire at {dashboardCharts[1].age}
+              </div>
+              <div className="mt-0.5 text-caption text-gray-500">
+                {currentYear} → {dashboardCharts[1].retireYear}
+              </div>
+              <div className="mt-4">
+                <HorizontalBarChart bars={dashboardCharts[1].bars} />
+              </div>
+            </DsCard>
           </div>
         </div>
-      </DsCard>
-
-      <DsCard>
-        <FanChart
-          series={fanSeries}
-          caption={`Pre-retirement balance — ${currentYear} → ${retireYear} at ${(DEFAULT_FAN_RATES[0] * 100).toFixed(0)}% to ${(DEFAULT_FAN_RATES[DEFAULT_FAN_RATES.length - 1] * 100).toFixed(0)}% growth`}
-        />
-      </DsCard>
-
-      <DsCard padded={false}>
-        <DsCard.Header
-          title={`Year-by-year projection (${(inputs.return_rate * 100).toFixed(1)}% return, ${(inputs.retire_tax_rate * 100).toFixed(0)}% tax)`}
-          subtitle={`${projection.rows.length} years`}
-        />
-        <RetireTable rows={projection.rows} firstNegIdx={summary.firstNegativeIndex} />
-      </DsCard>
+      )}
     </div>
   );
 }
@@ -1189,45 +1170,6 @@ function KpiCard({
   );
 }
 
-function FiCard({
-  t12Spend,
-  investable,
-}: {
-  t12Spend: number;
-  investable: number;
-}) {
-  const target = t12Spend * 25;
-  const multiplier = target > 0 ? investable / target : null;
-  const pct = multiplier != null ? Math.min(multiplier, 1) * 100 : 0;
-  return (
-    <DsCard className="border-gold-300 bg-gold-100/40">
-      <div className="text-label uppercase text-gold-600">FI Multiplier</div>
-      <div className="mt-0.5 text-caption text-gray-600">
-        25× trailing-12 spend
-      </div>
-      <div className="mt-3 text-3xl font-bold tabular-nums text-navy-900">
-        {multiplier != null ? `${(multiplier * 100).toFixed(1)}%` : '—'}
-      </div>
-      <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-white">
-        <div
-          className="h-full bg-gold-500"
-          style={{ width: `${Math.max(2, pct)}%` }}
-        />
-      </div>
-      <div className="mt-2 grid grid-cols-2 text-xs text-gray-600">
-        <div>
-          T12 spend
-          <div className="tabular-nums text-navy-800">{fmtUsd(t12Spend)}</div>
-        </div>
-        <div>
-          Target
-          <div className="tabular-nums text-navy-800">{fmtUsd(target)}</div>
-        </div>
-      </div>
-    </DsCard>
-  );
-}
-
 function RetireInputRow({
   kind,
   label,
@@ -1361,3 +1303,67 @@ function RetireTable({
 
 // Use fmtPct so it's not flagged as unused (we may use it in tooltips later).
 void fmtPct;
+
+// ----------------------------------------------------------------------------
+// Horizontal bar chart — projected balances by return rate
+// ----------------------------------------------------------------------------
+
+const BAR_COLORS = [
+  '#3b559a', // navy-500 (lighter, for smallest bars)
+  '#2f4580',
+  '#243460',
+  '#1e2c52',
+  '#182445',
+  '#0d1527', // navy-900 (darkest, for largest bars)
+];
+
+function HorizontalBarChart({
+  bars,
+  large,
+}: {
+  bars: { rate: number; balance: number }[];
+  large?: boolean;
+}) {
+  const maxVal = Math.max(...bars.map((b) => b.balance), 1);
+  const barHeight = large ? 36 : 28;
+  const gap = large ? 10 : 6;
+
+  return (
+    <div className="space-y-0" style={{ gap }}>
+      {bars.map((bar, i) => {
+        const widthPct = Math.max(1, (bar.balance / maxVal) * 100);
+        return (
+          <div key={bar.rate} className="flex items-center" style={{ gap: 8, marginBottom: gap }}>
+            <div
+              className="shrink-0 text-right tabular-nums text-gray-600"
+              style={{ width: 32, fontSize: large ? 13 : 12 }}
+            >
+              {(bar.rate * 100).toFixed(0)}%
+            </div>
+            <div className="relative flex-1" style={{ height: barHeight }}>
+              <div
+                className="absolute inset-y-0 left-0 rounded-r"
+                style={{
+                  width: `${widthPct}%`,
+                  backgroundColor: BAR_COLORS[i % BAR_COLORS.length],
+                }}
+              />
+              <span
+                className="absolute inset-y-0 flex items-center font-semibold tabular-nums text-white"
+                style={{
+                  left: `${Math.min(widthPct, 97)}%`,
+                  paddingLeft: 8,
+                  fontSize: large ? 13 : 11,
+                  color: widthPct > 60 ? '#ffffff' : '#1a2744',
+                  transform: widthPct > 60 ? `translateX(calc(-100% - 8px))` : undefined,
+                }}
+              >
+                {fmtUsd(bar.balance, { decimals: 0 })}
+              </span>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
