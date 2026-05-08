@@ -2,7 +2,7 @@
 // Phase 2 shared types
 // ============================================================================
 
-export type SourceType = 'discover' | 'amex' | 'bcu_visa' | 'bcu_powerplus' | 'manual';
+export type SourceType = 'discover' | 'amex' | 'bcu_visa' | 'bcu_powerplus' | 'manual' | 'fama_french';
 
 /**
  * The internal shape every parser produces. Sign convention is already

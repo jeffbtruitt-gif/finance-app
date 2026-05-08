@@ -2,6 +2,7 @@ import type { ParseResult, SourceType } from '../../../types/phase2';
 import { discoverParser } from './discover';
 import { amexParser } from './amex';
 import { bcuVisaParser, bcuPowerplusParser, detectBcuVariant } from './bcu';
+import { isFamaFrenchCsv } from './famaFrench';
 import Papa from 'papaparse';
 
 /**
@@ -25,6 +26,12 @@ export interface DetectResult {
  * (using the auto-detected one or a user override) and calls parseRows.
  */
 export function detectFromCsv(csvText: string): DetectResult {
+  // Fama-French files have comment lines before the CSV header, so check the
+  // raw text first before Papa Parse (which would misparse the preamble).
+  if (isFamaFrenchCsv(csvText)) {
+    return { source_type: 'fama_french', header_row: [], raw_rows: [] };
+  }
+
   const parsed = Papa.parse<Record<string, string>>(csvText, {
     header: true,
     skipEmptyLines: true,
