@@ -312,13 +312,17 @@ export type Database = {
         Row: {
           id: string;
           household_id: string;
-          item_id: string;
+          item_id: string | null;
+          factor_key: string | null;
+          label: string | null;
           created_at: string;
         };
         Insert: {
           id?: string;
           household_id: string;
-          item_id: string;
+          item_id?: string | null;
+          factor_key?: string | null;
+          label?: string | null;
         };
         Update: Partial<Database['public']['Tables']['tf_performance_accounts']['Row']>;
         Relationships: EmptyRelationships;

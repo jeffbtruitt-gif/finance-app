@@ -148,18 +148,40 @@ function AccountsTab({
   onAdd: (item_id: string) => Promise<void>;
   onRemove: (perfAcctId: string) => Promise<void>;
 }) {
-  const trackedItemIds = new Set(perfAccts.map((a) => a.item_id));
-  const trackedItems = perfAccts
+  const portfolioAccts = perfAccts.filter((a) => a.item_id != null);
+  const factorAccts = perfAccts.filter((a) => a.factor_key != null);
+  const trackedItemIds = new Set(portfolioAccts.map((a) => a.item_id));
+  const trackedItems = portfolioAccts
     .map((a) => ({ perfAcct: a, item: items.find((i) => i.id === a.item_id) }))
     .filter((x) => x.item != null) as { perfAcct: PerfAccount; item: BsItem }[];
   const untrackedItems = items.filter((i) => !trackedItemIds.has(i.id));
 
   return (
     <div className="space-y-6">
+      {/* Factor accounts (imported from Fama-French) */}
+      {factorAccts.length > 0 && (
+        <Card padded={false}>
+          <div className="border-b border-navy-100 px-4 py-2.5">
+            <h3 className="text-sm font-semibold text-navy-800">Fama-French Factors</h3>
+          </div>
+          <div className="divide-y divide-navy-100">
+            {factorAccts.map((a) => (
+              <div key={a.id} className="flex items-center justify-between px-4 py-2.5">
+                <div>
+                  <span className="text-sm font-medium text-navy-900">{a.label}</span>
+                  <span className="ml-2 text-xs text-gray-400">imported factor</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
+      {/* Portfolio accounts (linked to BS items) */}
       {trackedItems.length > 0 ? (
         <Card padded={false}>
           <div className="border-b border-navy-100 px-4 py-2.5">
-            <h3 className="text-sm font-semibold text-navy-800">Tracked Accounts</h3>
+            <h3 className="text-sm font-semibold text-navy-800">Tracked Portfolio Accounts</h3>
           </div>
           <div className="divide-y divide-navy-100">
             {trackedItems.map(({ perfAcct, item }) => (
@@ -186,7 +208,7 @@ function AccountsTab({
       ) : (
         <Card>
           <p className="py-4 text-center text-sm text-gray-400">
-            No accounts being tracked yet. Add an account below to get started.
+            No portfolio accounts being tracked yet. Add an account below to get started.
           </p>
         </Card>
       )}
@@ -250,13 +272,18 @@ function RatesTab({
     return m;
   }, [rates]);
 
-  const rows = useMemo(
-    () =>
-      perfAccts
-        .map((a) => ({ perfAcct: a, item: items.find((i) => i.id === a.item_id) }))
-        .filter((x) => x.item != null) as { perfAcct: PerfAccount; item: BsItem }[],
-    [perfAccts, items],
-  );
+  const rows = useMemo(() => {
+    const out: { perfAcct: PerfAccount; name: string; isFactor: boolean }[] = [];
+    for (const a of perfAccts) {
+      if (a.factor_key) {
+        out.push({ perfAcct: a, name: a.label ?? a.factor_key, isFactor: true });
+      } else {
+        const item = items.find((i) => i.id === a.item_id);
+        if (item) out.push({ perfAcct: a, name: item.name, isFactor: false });
+      }
+    }
+    return out;
+  }, [perfAccts, items]);
 
   const colAcct = 'min-w-[220px] w-[220px]';
   const colMonth = 'min-w-[100px] w-[100px]';
@@ -296,7 +323,7 @@ function RatesTab({
           </div>
 
           {/* Rows */}
-          {rows.map(({ perfAcct, item }, ri) => {
+          {rows.map(({ perfAcct, name, isFactor }, ri) => {
             const stripe = ri % 2 === 1;
             return (
               <div
@@ -308,7 +335,12 @@ function RatesTab({
                     stripe ? 'bg-gray-50' : 'bg-white'
                   } flex items-center group-hover:bg-navy-50/40`}
                 >
-                  {item.name}
+                  {name}
+                  {isFactor && (
+                    <span className="ml-1.5 rounded bg-navy-100 px-1 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-navy-500">
+                      Factor
+                    </span>
+                  )}
                 </div>
                 {months.map((p, mi) => {
                   const monthIso = `${p.year}-${String(p.month).padStart(2, '0')}-01`;
@@ -317,10 +349,12 @@ function RatesTab({
                     <RateCell
                       key={periodKey(p)}
                       acctId={perfAcct.id}
+                      rowIdx={ri}
+                      rowCount={rows.length}
                       monthIdx={mi}
                       monthIso={monthIso}
                       period={p}
-                      accountName={item.name}
+                      accountName={name}
                       value={val}
                       colMonth={colMonth}
                       onSave={(raw) => {
@@ -345,7 +379,9 @@ function RatesTab({
 // ---------------------------------------------------------------------------
 
 function RateCell({
-  acctId,
+  acctId: _acctId,
+  rowIdx,
+  rowCount,
   monthIdx,
   monthIso: _monthIso,
   period,
@@ -355,6 +391,8 @@ function RateCell({
   onSave,
 }: {
   acctId: string;
+  rowIdx: number;
+  rowCount: number;
   monthIdx: number;
   monthIso: string;
   period: Period;
@@ -378,12 +416,14 @@ function RateCell({
     setEditing(false);
   };
 
+  const cellId = `${rowIdx}:${monthIdx}`;
+
   if (!editing) {
     return (
       <div className={`${colMonth} shrink-0 border-b border-r border-gray-100 text-sm tabular-nums`}>
         <button
           type="button"
-          data-rate-cell={`${acctId}:${monthIdx}`}
+          data-rate-cell={cellId}
           onClick={() => {
             setDraft(value == null ? '' : String(value));
             setEditing(true);
@@ -407,7 +447,7 @@ function RateCell({
   return (
     <div className={`${colMonth} shrink-0 border-b border-r border-gray-100 text-sm`}>
       <input
-        data-rate-cell={`${acctId}:${monthIdx}`}
+        data-rate-cell={cellId}
         autoFocus
         value={draft}
         onChange={(e) => setDraft(e.target.value)}
@@ -421,12 +461,15 @@ function RateCell({
         onKeyDown={(e) => {
           if (e.key === 'Enter') {
             e.preventDefault();
+            skipBlurRef.current = true;
             if (draft !== baseline) onSave(draft);
             setEditing(false);
-            const next = monthIdx + 1;
+            // Move down to the same column in the next row; wrap to first row if at bottom
+            const nextRow = rowIdx + 1 < rowCount ? rowIdx + 1 : 0;
+            const target = `${nextRow}:${monthIdx}`;
             setTimeout(() => {
               document
-                .querySelector<HTMLElement>(`[data-rate-cell="${acctId}:${next}"]`)
+                .querySelector<HTMLElement>(`[data-rate-cell="${target}"]`)
                 ?.click();
             }, 0);
           } else if (e.key === 'Escape') {
@@ -437,11 +480,13 @@ function RateCell({
             skipBlurRef.current = true;
             if (draft !== baseline) onSave(draft);
             setEditing(false);
-            const next = monthIdx + (e.shiftKey ? -1 : 1);
+            // Move right/left within the same row
+            const nextMonth = monthIdx + (e.shiftKey ? -1 : 1);
+            const target = `${rowIdx}:${nextMonth}`;
             setTimeout(() => {
               document
-                .querySelector<HTMLElement>(`[data-rate-cell="${acctId}:${next}"]`)
-                ?.focus();
+                .querySelector<HTMLElement>(`[data-rate-cell="${target}"]`)
+                ?.click();
             }, 0);
           }
         }}

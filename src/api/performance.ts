@@ -7,9 +7,20 @@ import { supabase } from './supabase';
 export interface PerfAccount {
   id: string;
   household_id: string;
-  item_id: string;
+  item_id: string | null;
+  factor_key: string | null;
+  label: string | null;
   created_at: string;
 }
+
+export const FF_FACTORS = [
+  { key: 'mkt_rf', short: 'Mkt-RF', label: 'Market Premium' },
+  { key: 'smb', short: 'SMB', label: 'Size Premium' },
+  { key: 'hml', short: 'HML', label: 'Value Premium' },
+  { key: 'rf', short: 'RF', label: 'Risk-Free Rate' },
+] as const;
+
+export type FfFactorKey = (typeof FF_FACTORS)[number]['key'];
 
 export interface PerfRate {
   id: string;
@@ -60,4 +71,47 @@ export async function upsertPerfRate(account_id: string, month: string, rate: nu
       { onConflict: 'account_id,month' },
     );
   if (error) throw error;
+}
+
+/**
+ * Ensure a factor account exists for the given household + factor_key.
+ * Returns the account id (existing or newly created).
+ */
+export async function ensureFactorAccount(
+  household_id: string,
+  factor_key: string,
+  label: string,
+): Promise<string> {
+  const { data: existing } = await supabase
+    .from('tf_performance_accounts')
+    .select('id')
+    .eq('household_id', household_id)
+    .eq('factor_key', factor_key)
+    .maybeSingle();
+  if (existing) return existing.id;
+
+  const { data: created, error } = await supabase
+    .from('tf_performance_accounts')
+    .insert({ household_id, factor_key, label })
+    .select('id')
+    .single();
+  if (error) throw error;
+  return created.id;
+}
+
+/**
+ * Bulk upsert rates for a single account. Used by the F-F import.
+ */
+export async function bulkUpsertRates(
+  rows: { account_id: string; month: string; rate: number }[],
+): Promise<void> {
+  if (rows.length === 0) return;
+  const CHUNK = 500;
+  for (let i = 0; i < rows.length; i += CHUNK) {
+    const chunk = rows.slice(i, i + CHUNK);
+    const { error } = await supabase
+      .from('tf_performance_rates')
+      .upsert(chunk, { onConflict: 'account_id,month' });
+    if (error) throw error;
+  }
 }

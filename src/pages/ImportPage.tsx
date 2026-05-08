@@ -39,6 +39,12 @@ import type {
 } from '../types/phase2';
 import { Badge, Button, Card } from '@/components/ds';
 import { AccountLinksPanel } from '@/components/AccountLinksPanel';
+import {
+  ensureFactorAccount,
+  bulkUpsertRates,
+  FF_FACTORS,
+} from '@/api/performance';
+import { parseFamaFrenchCsv } from '@/features/import/parsers/famaFrench';
 
 /**
  * Import page (/import) — multi-file edition.
@@ -530,7 +536,7 @@ function fileStats(
 // Page
 // ============================================================================
 
-type ImportPageTab = 'import' | 'manual' | 'recurring' | 'imported';
+type ImportPageTab = 'import' | 'manual' | 'recurring' | 'imported' | 'factors';
 
 export function ImportPage() {
   const navigate = useNavigate();
@@ -1052,6 +1058,9 @@ export function ImportPage() {
         <ImportTabButton active={pageTab === 'manual'} onClick={() => setPageTab('manual')}>
           Manual Add
         </ImportTabButton>
+        <ImportTabButton active={pageTab === 'factors'} onClick={() => setPageTab('factors')}>
+          Fama-French
+        </ImportTabButton>
       </div>
 
       {pageTab === 'import' && (
@@ -1338,6 +1347,10 @@ export function ImportPage() {
           accounts={accounts}
           queryClient={queryClient}
         />
+      )}
+
+      {pageTab === 'factors' && (
+        <FamaFrenchImportTab household={household} />
       )}
     </div>
     </div>
@@ -2888,4 +2901,196 @@ function DuplicateReasonBadge({
     );
   }
   return <Badge tone="neutral">Duplicate</Badge>;
+}
+
+// =============================================================================
+// Fama-French Factor Import Tab
+// =============================================================================
+
+function FamaFrenchImportTab({ household }: { household: Household | null }) {
+  const [file, setFile] = useState<File | null>(null);
+  const [status, setStatus] = useState<'idle' | 'parsed' | 'importing' | 'done' | 'error'>('idle');
+  const [parseInfo, setParseInfo] = useState<{
+    monthCount: number;
+    rowCount: number;
+    warnings: string[];
+    minMonth: string;
+    maxMonth: string;
+  } | null>(null);
+  const [importResult, setImportResult] = useState<string>('');
+  const [errorMsg, setErrorMsg] = useState('');
+  const [csvText, setCsvText] = useState('');
+
+  async function handleFile(f: File) {
+    setFile(f);
+    setStatus('idle');
+    setParseInfo(null);
+    setErrorMsg('');
+    setImportResult('');
+
+    const text = await f.text();
+    setCsvText(text);
+    const result = parseFamaFrenchCsv(text);
+
+    if (result.rows.length === 0) {
+      setErrorMsg(result.warnings.length > 0 ? result.warnings.join('; ') : 'No monthly data found in file.');
+      setStatus('error');
+      return;
+    }
+
+    const months = [...new Set(result.rows.map((r) => r.month))].sort();
+    setParseInfo({
+      monthCount: result.monthCount,
+      rowCount: result.rows.length,
+      warnings: result.warnings,
+      minMonth: months[0],
+      maxMonth: months[months.length - 1],
+    });
+    setStatus('parsed');
+  }
+
+  async function doImport() {
+    if (!household || !csvText) return;
+    setStatus('importing');
+    try {
+      const result = parseFamaFrenchCsv(csvText);
+      const acctIdByKey = new Map<string, string>();
+
+      for (const factor of FF_FACTORS) {
+        const acctId = await ensureFactorAccount(household.id, factor.key, `${factor.short} — ${factor.label}`);
+        acctIdByKey.set(factor.key, acctId);
+      }
+
+      const rateRows = result.rows.map((r) => ({
+        account_id: acctIdByKey.get(r.factor_key)!,
+        month: r.month,
+        rate: r.rate,
+      }));
+
+      await bulkUpsertRates(rateRows);
+
+      setImportResult(`Imported ${result.monthCount} months × 4 factors = ${result.rows.length} rate records.`);
+      setStatus('done');
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : String(err));
+      setStatus('error');
+    }
+  }
+
+  function formatMonth(iso: string) {
+    const [y, m] = iso.split('-');
+    const names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return `${names[Number(m) - 1]} ${y}`;
+  }
+
+  return (
+    <div className="space-y-4">
+      <p className="max-w-3xl text-body-base text-gray-500">
+        Import the{' '}
+        <a
+          href="https://mba.tuck.dartmouth.edu/pages/faculty/ken.french/data_library.html"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="font-medium text-navy-700 underline hover:text-navy-900"
+        >
+          Fama/French 3-Factor Model
+        </a>{' '}
+        CSV to load monthly market factor rates. These are used alongside your portfolio returns for
+        regression analysis on the Performance page.
+      </p>
+
+      <Card>
+        <div className="space-y-4">
+          <div className="flex flex-wrap items-center gap-3">
+            <label className="cursor-pointer rounded-md border border-navy-200 bg-white px-4 py-2 text-sm font-semibold text-navy-700 shadow-sm hover:bg-navy-50">
+              Choose CSV File
+              <input
+                type="file"
+                accept=".csv,.CSV"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) handleFile(f);
+                  e.target.value = '';
+                }}
+              />
+            </label>
+            {file && <span className="text-sm text-gray-600">{file.name}</span>}
+          </div>
+
+          {status === 'error' && (
+            <div className="rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">{errorMsg}</div>
+          )}
+
+          {status === 'parsed' && parseInfo && (
+            <div className="space-y-3">
+              <div className="rounded-md bg-navy-50 px-4 py-3">
+                <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-sm sm:grid-cols-4">
+                  <div>
+                    <span className="text-gray-500">Months:</span>{' '}
+                    <strong className="text-navy-800">{parseInfo.monthCount}</strong>
+                  </div>
+                  <div>
+                    <span className="text-gray-500">Records:</span>{' '}
+                    <strong className="text-navy-800">{parseInfo.rowCount}</strong>
+                  </div>
+                  <div>
+                    <span className="text-gray-500">From:</span>{' '}
+                    <strong className="text-navy-800">{formatMonth(parseInfo.minMonth)}</strong>
+                  </div>
+                  <div>
+                    <span className="text-gray-500">To:</span>{' '}
+                    <strong className="text-navy-800">{formatMonth(parseInfo.maxMonth)}</strong>
+                  </div>
+                </div>
+              </div>
+
+              <div className="text-sm text-gray-600">
+                <strong>Factors:</strong>{' '}
+                {FF_FACTORS.map((f) => (
+                  <span key={f.key} className="mr-3">
+                    <span className="font-semibold text-navy-800">{f.short}</span>{' '}
+                    <span className="text-gray-400">({f.label})</span>
+                  </span>
+                ))}
+              </div>
+
+              {parseInfo.warnings.length > 0 && (
+                <div className="rounded-md bg-yellow-50 px-4 py-2 text-xs text-yellow-800">
+                  {parseInfo.warnings.map((w, i) => (
+                    <div key={i}>{w}</div>
+                  ))}
+                </div>
+              )}
+
+              <Button onClick={doImport} variant="primary">
+                Import {parseInfo.monthCount} months of factor data
+              </Button>
+            </div>
+          )}
+
+          {status === 'importing' && (
+            <div className="text-sm text-gray-500">Importing factor data…</div>
+          )}
+
+          {status === 'done' && (
+            <div className="rounded-md bg-green-50 px-4 py-3 text-sm text-green-700">
+              {importResult}
+            </div>
+          )}
+        </div>
+      </Card>
+
+      <Card>
+        <h3 className="mb-2 text-sm font-semibold text-navy-800">About the Fama-French Factors</h3>
+        <div className="space-y-1.5 text-xs text-gray-600">
+          {FF_FACTORS.map((f) => (
+            <div key={f.key}>
+              <strong className="text-navy-800">{f.short}</strong> — {f.label}
+            </div>
+          ))}
+        </div>
+      </Card>
+    </div>
+  );
 }
