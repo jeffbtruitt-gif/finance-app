@@ -388,20 +388,40 @@ export type Database = {
         Update: Partial<Database['public']['Tables']['tf_tax_assumptions']['Row']>;
         Relationships: EmptyRelationships;
       };
+      tf_retire_scenarios: {
+        Row: {
+          id: string;
+          household_id: string;
+          name: string;
+          is_default: boolean;
+          sort_order: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          household_id: string;
+          name?: string;
+          is_default?: boolean;
+          sort_order?: number;
+          created_at?: string;
+        };
+        Update: Partial<Database['public']['Tables']['tf_retire_scenarios']['Row']>;
+        Relationships: EmptyRelationships;
+      };
       tf_retire_inputs: {
-        // Phase 7: pinned-key model — value stored as text so the same column
-        // can hold rates ("0.078"), ages ("60"), and dollars ("180000").
         Row: {
           id: string;
           household_id: string;
           key: string;
           value: string;
+          scenario_id: string | null;
         };
         Insert: {
           id?: string;
           household_id: string;
           key: string;
           value: string;
+          scenario_id?: string | null;
         };
         Update: Partial<Database['public']['Tables']['tf_retire_inputs']['Row']>;
         Relationships: EmptyRelationships;

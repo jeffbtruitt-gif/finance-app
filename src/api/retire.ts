@@ -1,24 +1,17 @@
 /**
- * Retire API — Phase 7.
+ * Retire API — Phase 7 + Scenario Layer.
  *
- * Wraps tf_retire_inputs (key/value text pairs) for the Retirement page.
+ * Wraps tf_retire_inputs (key/value text pairs) and tf_retire_scenarios for
+ * the Retirement page.
  *
- * Storage model:
- *   - One row per (household_id, key). Value is text and parsed by the page
- *     based on the pinned key's type. Storing text lets the same table hold
- *     rates ("0.078"), ages ("60"), and dollars ("180000") without a JSONB
- *     wrapper or three typed columns.
- *   - The page renders a pinned set of keys as a typed form. Anything else
- *     stored in the table appears in a "custom keys" area, same UX as the
- *     Tax block on the Assumptions page (Phase 6).
- *
- * Why pinned-keys-plus-custom: same reason as Phase 6's tax assumptions.
- * The spreadsheet's Retire tab has a fixed set of inputs (Jeff/Brit yearly
- * contrib, return rate, starting balance, two SS benefits, two retire ages,
- * retire spend, retire tax rate). Locking the schema would mean a migration
- * every time we want a new knob; leaving it free-form would lose the typed
- * validation the page wants. Pinning the known set in code while keeping the
- * table open gets us both.
+ * Scenario model:
+ *   - Each household has one or more named scenarios. The default scenario
+ *     ("Main Scenario") is created automatically.
+ *   - Per-scenario keys (return rate, contributions, spend, etc.) are stored
+ *     with scenario_id set. Shared keys (starting balance) have scenario_id
+ *     NULL and apply to all scenarios.
+ *   - The page loads all scenarios, runs projections for each (for the
+ *     comparison view), and lets the user edit one at a time.
  */
 
 import { supabase } from './supabase';
@@ -117,6 +110,121 @@ export const RETIRE_DEFAULTS: Record<PinnedRetireKey, number> = {
 /** Used when no `retire_spend` row exists and no reforecast drives spend. */
 export const RETIRE_SPEND_MANUAL_DEFAULT = 100_000;
 
+/** Keys that are shared across all scenarios (starting balance). These are
+ *  stored with scenario_id = NULL and returned regardless of which scenario
+ *  is active. */
+export const SHARED_RETIRE_KEYS = new Set([
+  RETIRE_LEGACY_STARTING_BALANCE_KEY,
+  RETIRE_START_BS_ITEM_IDS_KEY,
+  RETIRE_START_EXTRA_KEY,
+]);
+
+// ----------------------------------------------------------------------------
+// Scenarios
+// ----------------------------------------------------------------------------
+
+export interface RetireScenario {
+  id: string;
+  household_id: string;
+  name: string;
+  is_default: boolean;
+  sort_order: number;
+  created_at: string;
+}
+
+export async function fetchRetireScenarios(
+  household_id: string,
+): Promise<RetireScenario[]> {
+  const { data, error } = await supabase
+    .from('tf_retire_scenarios')
+    .select('id, household_id, name, is_default, sort_order, created_at')
+    .eq('household_id', household_id)
+    .order('sort_order');
+  if (error) throw error;
+  return data ?? [];
+}
+
+/** Ensure a default scenario exists for the household. Returns it. */
+export async function ensureDefaultScenario(
+  household_id: string,
+): Promise<RetireScenario> {
+  const existing = await fetchRetireScenarios(household_id);
+  const def = existing.find((s) => s.is_default);
+  if (def) return def;
+  const { data, error } = await supabase
+    .from('tf_retire_scenarios')
+    .insert({ household_id, name: 'Main Scenario', is_default: true, sort_order: 0 })
+    .select()
+    .single();
+  if (error) throw error;
+  return data as RetireScenario;
+}
+
+export async function createRetireScenario(args: {
+  household_id: string;
+  name: string;
+  clone_from_scenario_id?: string;
+}): Promise<RetireScenario> {
+  const scenarios = await fetchRetireScenarios(args.household_id);
+  const nextOrder = scenarios.length > 0
+    ? Math.max(...scenarios.map((s) => s.sort_order)) + 1
+    : 1;
+
+  const { data: newScenario, error } = await supabase
+    .from('tf_retire_scenarios')
+    .insert({
+      household_id: args.household_id,
+      name: args.name,
+      is_default: false,
+      sort_order: nextOrder,
+    })
+    .select()
+    .single();
+  if (error) throw error;
+
+  if (args.clone_from_scenario_id) {
+    const { data: sourceRows, error: fetchErr } = await supabase
+      .from('tf_retire_inputs')
+      .select('key, value')
+      .eq('scenario_id', args.clone_from_scenario_id);
+    if (fetchErr) throw fetchErr;
+    if (sourceRows && sourceRows.length > 0) {
+      const cloned = sourceRows.map((r) => ({
+        household_id: args.household_id,
+        key: r.key,
+        value: r.value,
+        scenario_id: (newScenario as RetireScenario).id,
+      }));
+      const { error: insertErr } = await supabase
+        .from('tf_retire_inputs')
+        .insert(cloned);
+      if (insertErr) throw insertErr;
+    }
+  }
+
+  return newScenario as RetireScenario;
+}
+
+export async function updateRetireScenario(args: {
+  id: string;
+  name: string;
+}): Promise<void> {
+  const { error } = await supabase
+    .from('tf_retire_scenarios')
+    .update({ name: args.name })
+    .eq('id', args.id);
+  if (error) throw error;
+}
+
+export async function deleteRetireScenario(id: string): Promise<void> {
+  const { error } = await supabase
+    .from('tf_retire_scenarios')
+    .delete()
+    .eq('id', id)
+    .eq('is_default', false);
+  if (error) throw error;
+}
+
 // ----------------------------------------------------------------------------
 // CRUD
 // ----------------------------------------------------------------------------
@@ -133,13 +241,33 @@ export interface RetireInputRow {
   rawValue: string;
 }
 
+/**
+ * Fetch inputs for a specific scenario. Returns the scenario's own inputs
+ * merged with shared (scenario_id NULL) inputs. If no scenario_id is given,
+ * returns all rows for the household (backward-compatible).
+ */
 export async function fetchRetireInputs(
   household_id: string,
+  scenario_id?: string,
 ): Promise<RetireInputRow[]> {
+  if (!scenario_id) {
+    const { data, error } = await supabase
+      .from('tf_retire_inputs')
+      .select('id, key, value, scenario_id')
+      .eq('household_id', household_id);
+    if (error) throw error;
+    return (data ?? []).map((r) => ({
+      id: r.id,
+      key: r.key,
+      value: Number(r.value),
+      rawValue: r.value,
+    }));
+  }
   const { data, error } = await supabase
     .from('tf_retire_inputs')
-    .select('id, key, value')
-    .eq('household_id', household_id);
+    .select('id, key, value, scenario_id')
+    .eq('household_id', household_id)
+    .or(`scenario_id.eq.${scenario_id},scenario_id.is.null`);
   if (error) throw error;
   return (data ?? []).map((r) => ({
     id: r.id,
@@ -153,22 +281,63 @@ export async function upsertRetireInput(args: {
   household_id: string;
   key: string;
   value: number | null;
+  scenario_id?: string | null;
 }): Promise<void> {
+  const scenarioId = SHARED_RETIRE_KEYS.has(args.key) ? null : (args.scenario_id ?? null);
   if (args.value == null || !Number.isFinite(args.value)) {
-    await deleteRetireInput({ household_id: args.household_id, key: args.key });
+    await deleteRetireInput({ household_id: args.household_id, key: args.key, scenario_id: scenarioId });
     return;
   }
-  const { error } = await supabase
-    .from('tf_retire_inputs')
-    .upsert(
-      {
-        household_id: args.household_id,
-        key: args.key,
-        value: String(args.value),
-      },
-      { onConflict: 'household_id,key' },
-    );
-  if (error) throw error;
+  if (scenarioId) {
+    const { data: existing } = await supabase
+      .from('tf_retire_inputs')
+      .select('id')
+      .eq('scenario_id', scenarioId)
+      .eq('key', args.key)
+      .maybeSingle();
+    if (existing) {
+      const { error } = await supabase
+        .from('tf_retire_inputs')
+        .update({ value: String(args.value) })
+        .eq('id', existing.id);
+      if (error) throw error;
+    } else {
+      const { error } = await supabase
+        .from('tf_retire_inputs')
+        .insert({
+          household_id: args.household_id,
+          key: args.key,
+          value: String(args.value),
+          scenario_id: scenarioId,
+        });
+      if (error) throw error;
+    }
+  } else {
+    const { data: existing } = await supabase
+      .from('tf_retire_inputs')
+      .select('id')
+      .eq('household_id', args.household_id)
+      .eq('key', args.key)
+      .is('scenario_id', null)
+      .maybeSingle();
+    if (existing) {
+      const { error } = await supabase
+        .from('tf_retire_inputs')
+        .update({ value: String(args.value) })
+        .eq('id', existing.id);
+      if (error) throw error;
+    } else {
+      const { error } = await supabase
+        .from('tf_retire_inputs')
+        .insert({
+          household_id: args.household_id,
+          key: args.key,
+          value: String(args.value),
+          scenario_id: null,
+        });
+      if (error) throw error;
+    }
+  }
 }
 
 /** Store a non-numeric retire input (e.g. JSON array of balance-sheet item ids). */
@@ -176,27 +345,78 @@ export async function upsertRetireInputText(args: {
   household_id: string;
   key: string;
   text: string;
+  scenario_id?: string | null;
 }): Promise<void> {
-  const { error } = await supabase.from('tf_retire_inputs').upsert(
-    {
-      household_id: args.household_id,
-      key: args.key,
-      value: args.text,
-    },
-    { onConflict: 'household_id,key' },
-  );
-  if (error) throw error;
+  const scenarioId = SHARED_RETIRE_KEYS.has(args.key) ? null : (args.scenario_id ?? null);
+  if (scenarioId) {
+    const { data: existing } = await supabase
+      .from('tf_retire_inputs')
+      .select('id')
+      .eq('scenario_id', scenarioId)
+      .eq('key', args.key)
+      .maybeSingle();
+    if (existing) {
+      const { error } = await supabase
+        .from('tf_retire_inputs')
+        .update({ value: args.text })
+        .eq('id', existing.id);
+      if (error) throw error;
+    } else {
+      const { error } = await supabase
+        .from('tf_retire_inputs')
+        .insert({
+          household_id: args.household_id,
+          key: args.key,
+          value: args.text,
+          scenario_id: scenarioId,
+        });
+      if (error) throw error;
+    }
+  } else {
+    const { data: existing } = await supabase
+      .from('tf_retire_inputs')
+      .select('id')
+      .eq('household_id', args.household_id)
+      .eq('key', args.key)
+      .is('scenario_id', null)
+      .maybeSingle();
+    if (existing) {
+      const { error } = await supabase
+        .from('tf_retire_inputs')
+        .update({ value: args.text })
+        .eq('id', existing.id);
+      if (error) throw error;
+    } else {
+      const { error } = await supabase
+        .from('tf_retire_inputs')
+        .insert({
+          household_id: args.household_id,
+          key: args.key,
+          value: args.text,
+          scenario_id: null,
+        });
+      if (error) throw error;
+    }
+  }
 }
 
 export async function deleteRetireInput(args: {
   household_id: string;
   key: string;
+  scenario_id?: string | null;
 }): Promise<void> {
-  const { error } = await supabase
+  const scenarioId = SHARED_RETIRE_KEYS.has(args.key) ? null : (args.scenario_id ?? null);
+  let query = supabase
     .from('tf_retire_inputs')
     .delete()
     .eq('household_id', args.household_id)
     .eq('key', args.key);
+  if (scenarioId) {
+    query = query.eq('scenario_id', scenarioId);
+  } else {
+    query = query.is('scenario_id', null);
+  }
+  const { error } = await query;
   if (error) throw error;
 }
 
