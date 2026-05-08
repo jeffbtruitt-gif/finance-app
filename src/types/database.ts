@@ -308,6 +308,37 @@ export type Database = {
         Update: Partial<Database['public']['Tables']['tf_bs_allocations']['Row']>;
         Relationships: EmptyRelationships;
       };
+      tf_performance_accounts: {
+        Row: {
+          id: string;
+          household_id: string;
+          item_id: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          household_id: string;
+          item_id: string;
+        };
+        Update: Partial<Database['public']['Tables']['tf_performance_accounts']['Row']>;
+        Relationships: EmptyRelationships;
+      };
+      tf_performance_rates: {
+        Row: {
+          id: string;
+          account_id: string;
+          month: string;
+          rate: number;
+        };
+        Insert: {
+          id?: string;
+          account_id: string;
+          month: string;
+          rate?: number;
+        };
+        Update: Partial<Database['public']['Tables']['tf_performance_rates']['Row']>;
+        Relationships: EmptyRelationships;
+      };
       tf_balance_sheet_values: {
         Row: {
           id: string;

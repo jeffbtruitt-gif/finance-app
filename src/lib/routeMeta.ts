@@ -39,6 +39,10 @@ export function getPageMeta(pathname: string, period?: Period): PageMeta {
         },
       },
       {
+        pattern: '/balance-sheet/performance',
+        meta: { title: 'Performance', description: 'Monthly return rates by portfolio account.' },
+      },
+      {
         pattern: '/balance-sheet/allocation',
         meta: { title: 'BS Allocation', description: 'Asset class allocation across balance-sheet accounts.' },
       },

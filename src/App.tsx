@@ -26,6 +26,7 @@ import { AssumptionsPage } from './pages/assumptions/AssumptionsPage';
 import { BillsPage } from './pages/bills/BillsPage';
 import { ManageAccountsPage } from './pages/settings/ManageAccountsPage';
 import { BsAllocationPage } from './pages/balance-sheet/BsAllocationPage';
+import { PerformancePage } from './pages/performance/PerformancePage';
 import { RetirePage } from './pages/retire/RetirePage';
 import { CollegePage } from './pages/college/CollegePage';
 import { AppPeriodProvider } from '@/lib/appPeriodContext';
@@ -64,6 +65,7 @@ export default function App() {
                   <Route path="/categories" element={<CategoriesPage />} />
                   <Route path="/balance-sheet" element={<BalanceSheetPage />} />
                   <Route path="/balance-sheet/allocation" element={<BsAllocationPage />} />
+                  <Route path="/balance-sheet/performance" element={<PerformancePage />} />
                   <Route path="/assumptions" element={<AssumptionsPage />} />
                   <Route path="/assumptions/:year" element={<AssumptionsPage />} />
                   <Route path="/bills" element={<BillsPage />} />

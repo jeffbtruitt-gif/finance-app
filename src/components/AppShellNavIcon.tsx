@@ -27,6 +27,7 @@ export type AppShellNavIconId =
   | 'categories'
   | 'managerules'
   | 'bsallocation'
+  | 'performance'
   | 'manageaccounts';
 
 const NAVY_ACTIVE = '#243460'; // navy-700
@@ -124,6 +125,12 @@ export function AppShellNavIcon({
         <circle cx="9" cy="9" r="6.5" stroke={s} strokeWidth={sw} />
         <path d="M9 2.5V9h6.5" stroke={s} strokeWidth={sw} strokeLinecap="round" />
         <path d="M9 9L4.5 13.5" stroke={s} strokeWidth={sw} strokeLinecap="round" />
+      </svg>
+    ),
+    performance: (
+      <svg width={16} height={16} viewBox="0 0 18 18" fill="none" aria-hidden>
+        <path d="M2.5 14.5L6.5 8l3 4 5.5-9" stroke={s} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M12.5 3H15.5V6" stroke={s} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round" />
       </svg>
     ),
     retire: (

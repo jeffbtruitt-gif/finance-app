@@ -72,6 +72,7 @@ function buildNavItems(year: number): NavItem[] {
     { to: '/bills', label: 'Bills', iconId: 'bills', group: 'Budget Input' },
     { to: '/balance-sheet', label: 'BS Accounts', iconId: 'bsaccounts', group: 'BS Input' },
     { to: '/balance-sheet/allocation', label: 'BS Allocation', iconId: 'bsallocation', group: 'BS Input' },
+    { to: '/balance-sheet/performance', label: 'Performance', iconId: 'performance', group: 'BS Input' },
     { to: '/retire', label: 'Retirement', iconId: 'retire', group: 'Long Term' },
     { to: '/college', label: 'College', iconId: 'college', group: 'Long Term' },
     { to: '/reports', label: '1 MO', iconId: '1mo', group: 'Budget Reports' },
