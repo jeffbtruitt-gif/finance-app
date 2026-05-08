@@ -2436,18 +2436,25 @@ function FileTableRow({
           {ff ? ff.rowCount : 0}
         </td>
         <td colSpan={4} className="px-3 py-2 text-center">
-          {file.status === 'pending' && ff && onImportFamaFrench && (
-            <button
-              onClick={onImportFamaFrench}
-              className="rounded-md bg-navy-600 px-3 py-1 text-xs font-semibold text-white shadow-sm hover:bg-navy-700"
-            >
-              Import {ff.monthCount} months
-            </button>
+          {file.status === 'pending' && ff && (
+            onImportFamaFrench ? (
+              <button
+                onClick={onImportFamaFrench}
+                className="rounded-md bg-navy-600 px-3 py-1 text-xs font-semibold text-white shadow-sm hover:bg-navy-700"
+              >
+                Import {ff.monthCount} months
+              </button>
+            ) : (
+              <span className="text-xs text-gray-400">Loading…</span>
+            )
           )}
           {file.status === 'ready' && (
             <Badge tone="pos">Imported</Badge>
           )}
-          {file.status === 'error' && (
+          {file.status === 'error' && file.errorMessage && (
+            <span className="text-xs text-neg">{file.errorMessage}</span>
+          )}
+          {file.status === 'error' && !file.errorMessage && (
             <Badge tone="neg">Error</Badge>
           )}
         </td>
