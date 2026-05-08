@@ -124,7 +124,27 @@ export function CollegePage() {
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
-        <p className="text-body-base text-gray-500">Per-kid 529 projection from {currentYear}.</p>
+        <div>
+          <p className="text-body-base text-gray-500">Per-kid 529 projection from {currentYear}.</p>
+          <div className="mt-1 flex flex-wrap gap-3 text-xs">
+            <a
+              href="https://www.mefa.org/pay/college-cost-projector#future-college-costs"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-medium text-navy-700 underline hover:text-navy-900"
+            >
+              College Costs (MEFA)
+            </a>
+            <a
+              href="https://www.schwab.com/saving-for-college/college-savings-calculator"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-medium text-navy-700 underline hover:text-navy-900"
+            >
+              Schwab Calculator
+            </a>
+          </div>
+        </div>
         {projections.length > 0 && (
           <CollegeSummaryBadge totalSurplus={totalSurplus} allOnTrack={allOnTrack} />
         )}

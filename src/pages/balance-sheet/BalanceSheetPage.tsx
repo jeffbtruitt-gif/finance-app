@@ -4,7 +4,8 @@
  * Two stacked sections:
  *   1. Item table — one row per active asset/liability. Shows the *effective*
  *      value at the selected as-of month (perpetuate-forward) plus a per-item
- *      24-month sparkline. Inline-editable name / equity_group / archive.
+ *      24-month sparkline. Read-only names/groups (managed on Settings →
+ *      Manage Accounts).
  *   2. Per-item value editor — appears when you select an item. Lists every
  *      explicit value entry the user has made (any month, any year), with
  *      add/edit/delete. This is the "input a March value, watch it
@@ -15,15 +16,12 @@
  * As-of month follows the app header period (same as the rest of the app).
  */
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useHousehold } from '@/api/household';
 import {
   fetchBalanceSheetItems,
   fetchBalanceSheetValues,
-  createBalanceSheetItem,
-  updateBalanceSheetItem,
-  deleteBalanceSheetItem,
   setBalanceSheetValue,
   deleteBalanceSheetValue,
 } from '@/api/balanceSheet';
@@ -43,16 +41,6 @@ import { formatPeriod, type Period, MONTH_NAMES_LONG } from '@/lib/period';
 import { StatusPanel } from '@/components/StatusPanel';
 import { Sparkline } from '@/components/Sparkline';
 import { Badge, Button, Card, RT } from '@/components/ds';
-
-const KNOWN_EQUITY_GROUPS = [
-  'Retirement',
-  'Investments',
-  'Savings',
-  'Credit Union',
-  'House',
-  'Car',
-  'Other',
-] as const;
 
 export function BalanceSheetPage() {
   const household = useHousehold();
@@ -106,78 +94,54 @@ export function BalanceSheetPage() {
       <p className="mb-4 text-sm text-gray-600">
         Values as of{' '}
         <span className="font-semibold text-navy-900">{formatPeriod(period)}</span>. Each value
-        carries forward until you enter a new one — change a March entry and only March (and any
-        later months without their own entry) update.
+        carries forward until you enter a new one.{' '}
+        <a href="/settings/accounts" className="font-medium text-navy-700 underline hover:text-navy-900">
+          Manage accounts
+        </a>
       </p>
 
       {firstError ? (
         <StatusPanel
           kind="error"
-          message="Couldn’t load balance sheet"
+          message="Couldn't load balance sheet"
           detail={firstError instanceof Error ? firstError.message : undefined}
         />
       ) : loading ? (
         <StatusPanel kind="loading" message="Loading balance sheet…" />
       ) : (
-        <>
-          <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1fr_420px]">
-            <ItemsPanel
-              items={items}
-              values={values}
-              effective={effective}
-              effectivePrior={effectivePrior}
-              series24Period={period}
-              selectedItemId={selectedItemId}
-              onSelect={setSelectedItemId}
-              onCreate={async (args) => {
-                if (!household) return;
-                await createBalanceSheetItem({
-                  household_id: household.id,
-                  ...args,
-                  sort_order: items.length * 10,
-                });
-                invalidate();
-              }}
-              onPatch={async (id, patch) => {
-                await updateBalanceSheetItem({ id, patch });
-                invalidate();
-              }}
-              onDelete={async (id) => {
-                if (!confirm('Delete this item and all its history? This cannot be undone.'))
-                  return;
-                await deleteBalanceSheetItem(id);
-                if (selectedItemId === id) setSelectedItemId(null);
-                invalidate();
-              }}
-            />
+        <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1fr_420px]">
+          <ItemsPanel
+            items={items}
+            values={values}
+            effective={effective}
+            effectivePrior={effectivePrior}
+            series24Period={period}
+            selectedItemId={selectedItemId}
+            onSelect={setSelectedItemId}
+          />
 
-            <ValueEditorPanel
-              item={selectedItem}
-              values={values}
-              effectiveValue={selectedItem ? effective.get(selectedItem.id) ?? null : null}
-              targetIso={targetIso}
-              onPatchItem={async (id, patch) => {
-                await updateBalanceSheetItem({ id, patch });
-                invalidate();
-              }}
-              onSave={async (vals) => {
-                await setBalanceSheetValue(vals);
-                invalidate();
-              }}
-              onDelete={async (vals) => {
-                await deleteBalanceSheetValue(vals);
-                invalidate();
-              }}
-            />
-          </div>
-        </>
+          <ValueEditorPanel
+            item={selectedItem}
+            values={values}
+            effectiveValue={selectedItem ? effective.get(selectedItem.id) ?? null : null}
+            targetIso={targetIso}
+            onSave={async (vals) => {
+              await setBalanceSheetValue(vals);
+              invalidate();
+            }}
+            onDelete={async (vals) => {
+              await deleteBalanceSheetValue(vals);
+              invalidate();
+            }}
+          />
+        </div>
       )}
     </div>
   );
 }
 
 // ----------------------------------------------------------------------------
-// Items panel — list + create
+// Items panel — read-only list
 // ----------------------------------------------------------------------------
 
 interface ItemsPanelProps {
@@ -188,41 +152,10 @@ interface ItemsPanelProps {
   series24Period: Period;
   selectedItemId: string | null;
   onSelect: (id: string) => void;
-  onCreate: (args: {
-    name: string;
-    type: 'asset' | 'liability';
-    equity_group?: string | null;
-  }) => Promise<void>;
-  onPatch: (
-    id: string,
-    patch: Partial<{
-      name: string;
-      type: 'asset' | 'liability';
-      equity_group: string | null;
-      is_active: boolean;
-      sort_order: number;
-    }>,
-  ) => Promise<void>;
-  onDelete: (id: string) => Promise<void>;
 }
 
 function ItemsPanel(props: ItemsPanelProps) {
-  const {
-    items,
-    values,
-    effective,
-    effectivePrior,
-    series24Period,
-    selectedItemId,
-    onSelect,
-    onCreate,
-    onPatch,
-    onDelete,
-  } = props;
-
-  const [newName, setNewName] = useState('');
-  const [newType, setNewType] = useState<'asset' | 'liability'>('asset');
-  const [newGroup, setNewGroup] = useState<string>('');
+  const { items, values, effective, effectivePrior, series24Period, selectedItemId, onSelect } = props;
   const [showInactive, setShowInactive] = useState(false);
 
   const visible = items.filter((i) => showInactive || i.is_active);
@@ -252,8 +185,6 @@ function ItemsPanel(props: ItemsPanelProps) {
         seriesPeriod={series24Period}
         selectedItemId={selectedItemId}
         onSelect={onSelect}
-        onPatch={onPatch}
-        onDelete={onDelete}
       />
       <ItemSection
         title="Liabilities"
@@ -264,61 +195,7 @@ function ItemsPanel(props: ItemsPanelProps) {
         seriesPeriod={series24Period}
         selectedItemId={selectedItemId}
         onSelect={onSelect}
-        onPatch={onPatch}
-        onDelete={onDelete}
       />
-
-      <div className="border-t border-navy-100 px-4 py-3">
-        <div className="text-label uppercase tracking-wider text-gray-500">
-          Add item
-        </div>
-        <div className="mt-2 flex flex-wrap items-center gap-2">
-          <input
-            value={newName}
-            onChange={(e) => setNewName(e.target.value)}
-            placeholder="Name (e.g. Crypto Wallet)"
-            className="min-w-[180px] flex-1 rounded-md border border-gray-300 bg-white px-2 py-1 text-sm focus:border-navy-500 focus:outline-none focus:ring-2 focus:ring-navy-200"
-          />
-          <select
-            value={newType}
-            onChange={(e) => setNewType(e.target.value as 'asset' | 'liability')}
-            className="rounded-md border border-gray-300 bg-white px-2 py-1 text-sm focus:border-navy-500 focus:outline-none focus:ring-2 focus:ring-navy-200"
-          >
-            <option value="asset">Asset</option>
-            <option value="liability">Liability</option>
-          </select>
-          <select
-            value={newGroup}
-            onChange={(e) => setNewGroup(e.target.value)}
-            className="rounded-md border border-gray-300 bg-white px-2 py-1 text-sm focus:border-navy-500 focus:outline-none focus:ring-2 focus:ring-navy-200"
-          >
-            <option value="">— group —</option>
-            {KNOWN_EQUITY_GROUPS.map((g) => (
-              <option key={g} value={g}>
-                {g}
-              </option>
-            ))}
-          </select>
-          <Button
-            variant="primary"
-            size="sm"
-            disabled={!newName.trim()}
-            onClick={async () => {
-              const trimmed = newName.trim();
-              if (!trimmed) return;
-              await onCreate({
-                name: trimmed,
-                type: newType,
-                equity_group: newGroup || null,
-              });
-              setNewName('');
-              setNewGroup('');
-            }}
-          >
-            Add
-          </Button>
-        </div>
-      </div>
     </Card>
   );
 }
@@ -332,8 +209,6 @@ interface ItemSectionProps {
   seriesPeriod: Period;
   selectedItemId: string | null;
   onSelect: (id: string) => void;
-  onPatch: ItemsPanelProps['onPatch'];
-  onDelete: (id: string) => Promise<void>;
 }
 
 function ItemSection({
@@ -345,8 +220,6 @@ function ItemSection({
   seriesPeriod,
   selectedItemId,
   onSelect,
-  onPatch,
-  onDelete,
 }: ItemSectionProps) {
   const { hideIncomeAssets } = usePrivacyMode();
   const $ = (n: number) => maskUsd(hideIncomeAssets, n, true);
@@ -370,7 +243,6 @@ function ItemSection({
             <th className={`${RT.th} ${RT.thRight}`}>Value</th>
             <th className={`${RT.th} ${RT.thRight}`}>Δ vs prior</th>
             <th className={`${RT.th} ${RT.thLeft}`}>24-mo trend</th>
-            <th className={RT.th} />
           </tr>
         </thead>
         <tbody>
@@ -396,19 +268,8 @@ function ItemSection({
                   isSel ? 'bg-gold-100/60' : 'hover:bg-navy-50/40'
                 } ${it.is_active ? '' : 'text-gray-400'}`}
               >
-                <td className="px-3 py-1.5">
-                  <InlineText
-                    value={it.name}
-                    onSave={(s) => onPatch(it.id, { name: s })}
-                  />
-                </td>
-                <td className="px-3 py-1.5 text-gray-500">
-                  <InlineSelect
-                    value={it.equity_group ?? ''}
-                    options={['', ...KNOWN_EQUITY_GROUPS]}
-                    onSave={(s) => onPatch(it.id, { equity_group: s || null })}
-                  />
-                </td>
+                <td className="px-3 py-1.5 font-medium">{it.name}</td>
+                <td className="px-3 py-1.5 text-sm text-gray-500">{it.equity_group || '—'}</td>
                 <td className="px-3 py-1.5 text-right tabular-nums">
                   {v == null ? <span className="text-gray-300">—</span> : $(v)}
                 </td>
@@ -435,26 +296,6 @@ function ItemSection({
                     />
                   )}
                 </td>
-                <td className="px-3 py-1.5 text-right">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onPatch(it.id, { is_active: !it.is_active });
-                    }}
-                    className="text-xs text-gray-500 hover:text-navy-800"
-                  >
-                    {it.is_active ? 'Archive' : 'Restore'}
-                  </button>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onDelete(it.id);
-                    }}
-                    className="ml-2 text-xs text-neg hover:underline"
-                  >
-                    Delete
-                  </button>
-                </td>
               </tr>
             );
           })}
@@ -462,7 +303,7 @@ function ItemSection({
             <td className="px-3 py-1.5">Total {title}</td>
             <td />
             <td className="px-3 py-1.5 text-right tabular-nums">{$(total)}</td>
-            <td colSpan={3} />
+            <td colSpan={2} />
           </tr>
         </tbody>
       </table>
@@ -471,77 +312,7 @@ function ItemSection({
 }
 
 // ----------------------------------------------------------------------------
-// Editable cell helpers
-// ----------------------------------------------------------------------------
-
-function InlineText({
-  value,
-  onSave,
-}: {
-  value: string;
-  onSave: (v: string) => void | Promise<void>;
-}) {
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(value);
-  if (!editing) {
-    return (
-      <span
-        onClick={(e) => {
-          e.stopPropagation();
-          setDraft(value);
-          setEditing(true);
-        }}
-      >
-        {value}
-      </span>
-    );
-  }
-  return (
-    <input
-      autoFocus
-      value={draft}
-      onClick={(e) => e.stopPropagation()}
-      onChange={(e) => setDraft(e.target.value)}
-      onBlur={() => {
-        if (draft.trim() && draft !== value) onSave(draft.trim());
-        setEditing(false);
-      }}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
-        if (e.key === 'Escape') setEditing(false);
-      }}
-      className="w-full rounded-md border border-gray-300 bg-white px-1.5 py-0.5 text-sm focus:border-navy-500 focus:outline-none focus:ring-2 focus:ring-navy-200"
-    />
-  );
-}
-
-function InlineSelect({
-  value,
-  options,
-  onSave,
-}: {
-  value: string;
-  options: readonly string[];
-  onSave: (v: string) => void | Promise<void>;
-}) {
-  return (
-    <select
-      value={value}
-      onClick={(e) => e.stopPropagation()}
-      onChange={(e) => onSave(e.target.value)}
-      className="rounded-md border border-transparent bg-transparent px-1 py-0.5 text-xs hover:border-gray-300 focus:border-navy-500 focus:outline-none focus:ring-2 focus:ring-navy-200"
-    >
-      {options.map((o) => (
-        <option key={o} value={o}>
-          {o || '—'}
-        </option>
-      ))}
-    </select>
-  );
-}
-
-// ----------------------------------------------------------------------------
-// Value editor — per-selected-item entry list
+// Value editor — per-selected-item entry list (values only, no account mgmt)
 // ----------------------------------------------------------------------------
 
 interface ValueEditorProps {
@@ -549,10 +320,6 @@ interface ValueEditorProps {
   values: BsValue[];
   effectiveValue: number | null;
   targetIso: string;
-  onPatchItem: (
-    id: string,
-    patch: Partial<{ value_source_url: string | null }>,
-  ) => Promise<void>;
   onSave: (args: {
     item_id: string;
     as_of_month: string;
@@ -562,84 +329,8 @@ interface ValueEditorProps {
   onDelete: (args: { item_id: string; as_of_month: string }) => Promise<void>;
 }
 
-function ItemValueSourceUrl({
-  item,
-  onPatch,
-}: {
-  item: BsItem;
-  onPatch: (id: string, patch: Partial<{ value_source_url: string | null }>) => Promise<void>;
-}) {
-  const saved = (item.value_source_url ?? '').trim();
-  const [draft, setDraft] = useState(saved);
-  const [busy, setBusy] = useState(false);
-
-  useEffect(() => {
-    setDraft((item.value_source_url ?? '').trim());
-  }, [item.id, item.value_source_url]);
-
-  const normalized = draft.trim();
-  const dirty = normalized !== saved;
-
-  const save = async () => {
-    if (!dirty) return;
-    setBusy(true);
-    try {
-      await onPatch(item.id, {
-        value_source_url: normalized === '' ? null : normalized,
-      });
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const openHref =
-    normalized &&
-    (normalized.startsWith('http://') || normalized.startsWith('https://'))
-      ? normalized
-      : null;
-
-  const inputCls =
-    'w-full rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm focus:border-navy-500 focus:outline-none focus:ring-2 focus:ring-navy-200';
-
-  return (
-    <div className="border-t border-navy-100 px-4 py-3">
-      <div className="text-label uppercase tracking-wider text-gray-500">Value source URL</div>
-      <p className="mt-1 text-caption text-gray-400">
-        One link per item (not per month). Use the page where you check this balance — e.g. your
-        bank or brokerage site.
-      </p>
-      <div className="mt-2 space-y-2">
-        <input
-          type="text"
-          inputMode="url"
-          autoComplete="url"
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          placeholder="https://…"
-          className={inputCls}
-        />
-        <div className="flex flex-wrap items-center gap-2">
-          <Button variant="secondary" size="sm" onClick={() => save()} disabled={!dirty || busy}>
-            {busy ? 'Saving…' : 'Save link'}
-          </Button>
-          {openHref && (
-            <a
-              href={openHref}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-sm font-medium text-navy-700 underline hover:text-navy-900"
-            >
-              Open link
-            </a>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function ValueEditorPanel(props: ValueEditorProps) {
-  const { item, values, effectiveValue, targetIso, onPatchItem, onSave, onDelete } = props;
+  const { item, values, effectiveValue, targetIso, onSave, onDelete } = props;
   const { hideIncomeAssets } = usePrivacyMode();
   const $ = (n: number) => maskUsd(hideIncomeAssets, n, true);
 
@@ -653,7 +344,6 @@ function ValueEditorPanel(props: ValueEditorProps) {
 
   const itemValues = valuesForItem(values, item.id);
 
-  // Quick-add form for THIS item, defaulted to the currently selected as-of.
   const initialPeriod = (() => {
     const [y, m] = targetIso.split('-');
     return { year: Number(y), month: Number(m) };
@@ -673,8 +363,6 @@ function ValueEditorPanel(props: ValueEditorProps) {
           </span>
         </div>
       </div>
-
-      <ItemValueSourceUrl item={item} onPatch={onPatchItem} />
 
       <QuickAddValue
         defaultPeriod={initialPeriod}

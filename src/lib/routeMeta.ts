@@ -39,6 +39,10 @@ export function getPageMeta(pathname: string, period?: Period): PageMeta {
         },
       },
       {
+        pattern: '/balance-sheet/allocation',
+        meta: { title: 'BS Allocation', description: 'Asset class allocation across balance-sheet accounts.' },
+      },
+      {
         pattern: '/balance-sheet',
         meta: { title: 'Balance Sheet', description: 'Assets, liabilities, and net worth snapshot.' },
       },
@@ -119,6 +123,10 @@ export function getPageMeta(pathname: string, period?: Period): PageMeta {
         },
       },
       {
+        pattern: '/bills',
+        meta: { title: 'Bills', description: 'Monthly recurring bills and payment websites.' },
+      },
+      {
         pattern: '/retire',
         meta: { title: 'Retirement', description: 'Long-term retirement projections.' },
       },
@@ -145,6 +153,13 @@ export function getPageMeta(pathname: string, period?: Period): PageMeta {
         meta: {
           title: 'Rules',
           description: 'Auto-categorize by description, amount, or account. Order sets priority.',
+        },
+      },
+      {
+        pattern: '/settings/accounts',
+        meta: {
+          title: 'Manage Accounts',
+          description: 'Add, rename, and configure balance-sheet accounts.',
         },
       },
     ];

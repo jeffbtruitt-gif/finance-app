@@ -289,6 +289,25 @@ export type Database = {
         Update: Partial<Database['public']['Tables']['tf_balance_sheet_items']['Row']>;
         Relationships: EmptyRelationships;
       };
+      tf_bs_allocations: {
+        Row: {
+          id: string;
+          item_id: string;
+          household_id: string;
+          category: 'us_stocks' | 'intl_stocks' | 'fixed_income' | 'real_estate' | 'cash';
+          percentage: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          item_id: string;
+          household_id: string;
+          category: 'us_stocks' | 'intl_stocks' | 'fixed_income' | 'real_estate' | 'cash';
+          percentage?: number;
+        };
+        Update: Partial<Database['public']['Tables']['tf_bs_allocations']['Row']>;
+        Relationships: EmptyRelationships;
+      };
       tf_balance_sheet_values: {
         Row: {
           id: string;
@@ -319,6 +338,33 @@ export type Database = {
           updated_at?: string;
         };
         Update: Partial<Database['public']['Tables']['tf_household_settings']['Row']>;
+        Relationships: EmptyRelationships;
+      };
+      tf_bills: {
+        Row: {
+          id: string;
+          household_id: string;
+          name: string;
+          url: string | null;
+          notes: string | null;
+          amount: number | null;
+          due_day: number | null;
+          is_active: boolean;
+          sort_order: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          household_id: string;
+          name: string;
+          url?: string | null;
+          notes?: string | null;
+          amount?: number | null;
+          due_day?: number | null;
+          is_active?: boolean;
+          sort_order?: number;
+        };
+        Update: Partial<Database['public']['Tables']['tf_bills']['Row']>;
         Relationships: EmptyRelationships;
       };
       tf_income_plan: {

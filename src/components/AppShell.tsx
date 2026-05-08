@@ -69,7 +69,9 @@ function buildNavItems(year: number): NavItem[] {
       id: 'reforecast',
     },
     { to: '/assumptions', label: 'Budget Assumptions', iconId: 'assumptions', group: 'Budget Input' },
+    { to: '/bills', label: 'Bills', iconId: 'bills', group: 'Budget Input' },
     { to: '/balance-sheet', label: 'BS Accounts', iconId: 'bsaccounts', group: 'BS Input' },
+    { to: '/balance-sheet/allocation', label: 'BS Allocation', iconId: 'bsallocation', group: 'BS Input' },
     { to: '/retire', label: 'Retirement', iconId: 'retire', group: 'Long Term' },
     { to: '/college', label: 'College', iconId: 'college', group: 'Long Term' },
     { to: '/reports', label: '1 MO', iconId: '1mo', group: 'Budget Reports' },
@@ -91,6 +93,7 @@ function buildNavItems(year: number): NavItem[] {
     { to: '/reports/balance-sheet', label: 'BS Report', iconId: 'bsreport', group: 'BS Reports' },
     { to: '/categories', label: 'Categories', iconId: 'categories', group: 'Settings' },
     { to: '/rules', label: 'Manage Rules', iconId: 'managerules', group: 'Settings' },
+    { to: '/settings/accounts', label: 'Manage Accounts', iconId: 'manageaccounts', group: 'Settings' },
   ];
 }
 

@@ -23,6 +23,9 @@ import { BudgetEditorPage } from './pages/budget/BudgetEditorPage';
 import { ReforecastPage } from './pages/budget/ReforecastPage';
 import { BalanceSheetPage } from './pages/balance-sheet/BalanceSheetPage';
 import { AssumptionsPage } from './pages/assumptions/AssumptionsPage';
+import { BillsPage } from './pages/bills/BillsPage';
+import { ManageAccountsPage } from './pages/settings/ManageAccountsPage';
+import { BsAllocationPage } from './pages/balance-sheet/BsAllocationPage';
 import { RetirePage } from './pages/retire/RetirePage';
 import { CollegePage } from './pages/college/CollegePage';
 import { AppPeriodProvider } from '@/lib/appPeriodContext';
@@ -60,8 +63,10 @@ export default function App() {
                   <Route path="/trips" element={<TripsPage />} />
                   <Route path="/categories" element={<CategoriesPage />} />
                   <Route path="/balance-sheet" element={<BalanceSheetPage />} />
+                  <Route path="/balance-sheet/allocation" element={<BsAllocationPage />} />
                   <Route path="/assumptions" element={<AssumptionsPage />} />
                   <Route path="/assumptions/:year" element={<AssumptionsPage />} />
+                  <Route path="/bills" element={<BillsPage />} />
                   <Route path="/budget/:year" element={<BudgetEditorPage />} />
                   <Route path="/budget/:year/revise" element={<ReforecastPage />} />
                   <Route path="/reports" element={<ReportsPage />} />
@@ -79,6 +84,7 @@ export default function App() {
                   <Route path="/rules/run" element={<RunRulesPage />} />
                   <Route path="/rules/new" element={<RuleBuilderPage />} />
                   <Route path="/rules/:id" element={<RuleBuilderPage />} />
+                  <Route path="/settings/accounts" element={<ManageAccountsPage />} />
                   <Route path="*" element={<Navigate to="/" replace />} />
                   </Routes>
                 </AppShell>

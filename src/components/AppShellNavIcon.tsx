@@ -23,8 +23,11 @@ export type AppShellNavIconId =
   | 'reporttx'
   | 'averages'
   | 'bsreport'
+  | 'bills'
   | 'categories'
-  | 'managerules';
+  | 'managerules'
+  | 'bsallocation'
+  | 'manageaccounts';
 
 const NAVY_ACTIVE = '#243460'; // navy-700
 const SKYLINE_IDLE = skylinePalette.DEFAULT;
@@ -116,6 +119,13 @@ export function AppShellNavIcon({
         <rect x="2.5" y="12" width="13" height="3.5" rx="0.8" stroke={s} strokeWidth={sw} />
       </svg>
     ),
+    bsallocation: (
+      <svg width={16} height={16} viewBox="0 0 18 18" fill="none" aria-hidden>
+        <circle cx="9" cy="9" r="6.5" stroke={s} strokeWidth={sw} />
+        <path d="M9 2.5V9h6.5" stroke={s} strokeWidth={sw} strokeLinecap="round" />
+        <path d="M9 9L4.5 13.5" stroke={s} strokeWidth={sw} strokeLinecap="round" />
+      </svg>
+    ),
     retire: (
       <svg width={16} height={16} viewBox="0 0 18 18" fill="none" aria-hidden>
         <path
@@ -174,6 +184,17 @@ export function AppShellNavIcon({
         <path d="M5.5 12L7.5 10l1.5 1.5L11.5 9" stroke={s} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round" />
       </svg>
     ),
+    bills: (
+      <svg width={16} height={16} viewBox="0 0 18 18" fill="none" aria-hidden>
+        <path
+          d="M4 2h10a1 1 0 011 1v12l-2-1.5-2 1.5-2-1.5-2 1.5-2-1.5L3 15V3a1 1 0 011-1z"
+          stroke={s}
+          strokeWidth={sw}
+          strokeLinejoin="round"
+        />
+        <path d="M6 6h6M6 9h4" stroke={s} strokeWidth={sw} strokeLinecap="round" />
+      </svg>
+    ),
     categories: (
       <svg width={16} height={16} viewBox="0 0 18 18" fill="none" aria-hidden>
         <rect x="2.5" y="2.5" width="5.5" height="5.5" rx="0.8" stroke={s} strokeWidth={sw} />
@@ -191,6 +212,14 @@ export function AppShellNavIcon({
           strokeLinejoin="round"
         />
         <circle cx="9" cy="8" r="1.8" stroke={s} strokeWidth={sw} />
+      </svg>
+    ),
+    manageaccounts: (
+      <svg width={16} height={16} viewBox="0 0 18 18" fill="none" aria-hidden>
+        <rect x="2.5" y="3" width="13" height="3.5" rx="0.8" stroke={s} strokeWidth={sw} />
+        <rect x="2.5" y="7.5" width="13" height="3.5" rx="0.8" stroke={s} strokeWidth={sw} />
+        <circle cx="14" cy="14" r="2.5" stroke={s} strokeWidth={sw} fill={WHITE} />
+        <path d="M14 12.8v2.4M12.8 14h2.4" stroke={s} strokeWidth={sw} strokeLinecap="round" />
       </svg>
     ),
   };
