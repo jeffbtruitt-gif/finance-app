@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, Navigate } from 'react-router-dom';
 import { useAuth } from '@/api/auth';
 import { Button } from '@/components/ds';
+import { ParticleSky } from '@/components/auth/ParticleSky';
 
 const LOGO_SRC = `${import.meta.env.BASE_URL}truitt-finance-logo.png`;
 
@@ -24,17 +25,8 @@ export function LoginPage() {
   };
 
   return (
-    <div className="relative flex min-h-screen items-center justify-center bg-navy-900 px-4">
-      {/* Soft radial accent — gold glow behind the card to hint at the brand
-          without dominating. Subtle on small screens, larger on wide. */}
-      <div
-        className="pointer-events-none absolute inset-0 opacity-30"
-        style={{
-          backgroundImage:
-            'radial-gradient(circle at 30% 30%, rgba(201,168,76,0.25), transparent 60%), radial-gradient(circle at 70% 80%, rgba(59,85,154,0.45), transparent 55%)',
-        }}
-        aria-hidden
-      />
+    <div className="relative flex min-h-screen items-center justify-center bg-navy-900 px-4 overflow-hidden">
+      <ParticleSky />
       <div className="relative w-full max-w-sm rounded-xl border border-navy-700 bg-white p-7 shadow-xl">
         <div className="mb-6 flex justify-center">
           <img

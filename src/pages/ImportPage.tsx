@@ -43,8 +43,10 @@ import {
   ensureFactorAccount,
   bulkUpsertRates,
   FF_FACTORS,
+  fetchFactorRatesForMonth,
 } from '@/api/performance';
 import { parseFamaFrenchCsv } from '@/features/import/parsers/famaFrench';
+import { errorMessageFromUnknown } from '@/lib/errors';
 
 /**
  * Import page (/import) — multi-file edition.
@@ -763,6 +765,9 @@ export function ImportPage() {
         rate: r.rate,
       }));
       await bulkUpsertRates(rateRows);
+      queryClient.invalidateQueries({ queryKey: ['perf-accounts', household.id] });
+      queryClient.invalidateQueries({ queryKey: ['perf-rates'] });
+      queryClient.invalidateQueries({ queryKey: ['ff-factor-rates'] });
       setFiles((prev) =>
         prev.map((f) =>
           f.id === file.id ? { ...f, status: 'ready' as const } : f,
@@ -772,7 +777,7 @@ export function ImportPage() {
       setFiles((prev) =>
         prev.map((f) =>
           f.id === file.id
-            ? { ...f, status: 'error' as const, errorMessage: err instanceof Error ? err.message : String(err) }
+            ? { ...f, status: 'error' as const, errorMessage: errorMessageFromUnknown(err) }
             : f,
         ),
       );
@@ -1407,6 +1412,7 @@ export function ImportPage() {
       {pageTab === 'imported' && (
         <ImportedDataTab
           period={period}
+          householdId={household?.id ?? null}
           loading={importStatsQuery.isLoading}
           error={importStatsQuery.error as Error | null}
           rows={importStatsQuery.data ?? []}
@@ -2094,11 +2100,13 @@ function formatImportMonthLabel(isoYmd: string): string {
 
 function ImportedDataTab({
   period,
+  householdId,
   loading,
   error,
   rows,
 }: {
   period: Period;
+  householdId: string | null;
   loading: boolean;
   error: Error | null;
   rows: ImportMonthlyStatRow[];
@@ -2109,6 +2117,12 @@ function ImportedDataTab({
     () => rows.filter((r) => r.period_month === filterMonthIso),
     [rows, filterMonthIso],
   );
+
+  const ffQuery = useQuery({
+    queryKey: ['ff-factor-rates', householdId, filterMonthIso],
+    enabled: !!householdId,
+    queryFn: () => fetchFactorRatesForMonth(householdId!, filterMonthIso),
+  });
 
   const grouped = useMemo(() => {
     const byMonth = new Map<
@@ -2218,7 +2232,72 @@ function ImportedDataTab({
           </table>
         </section>
       )}
+
+      <FamaFrenchRatesSection
+        period={period}
+        loading={ffQuery.isLoading}
+        rates={ffQuery.data ?? []}
+      />
     </div>
+  );
+}
+
+const FF_FACTOR_ORDER: Record<string, number> = { mkt_rf: 0, smb: 1, hml: 2, rf: 3 };
+
+function FamaFrenchRatesSection({
+  period,
+  loading,
+  rates,
+}: {
+  period: Period;
+  loading: boolean;
+  rates: { factor_key: string; label: string | null; rate: number }[];
+}) {
+  const sorted = useMemo(
+    () => [...rates].sort((a, b) => (FF_FACTOR_ORDER[a.factor_key] ?? 99) - (FF_FACTOR_ORDER[b.factor_key] ?? 99)),
+    [rates],
+  );
+
+  return (
+    <section className="mt-6">
+      <h3 className="mb-2 text-sm font-semibold text-navy-800">
+        Fama-French 3-Factor Rates — {formatPeriod(period)}
+      </h3>
+      {loading && <StatusPanel kind="loading" message="Loading factor rates…" />}
+      {!loading && sorted.length === 0 && (
+        <Card className="p-4 text-sm text-gray-500">
+          No Fama-French factor data imported for this month.
+        </Card>
+      )}
+      {!loading && sorted.length > 0 && (
+        <div className="overflow-hidden rounded-lg border border-navy-100 bg-white shadow-sm">
+          <table className="w-full text-sm">
+            <thead className="bg-navy-50/60 text-[11px] uppercase tracking-wider text-gray-600">
+              <tr>
+                <th className="px-3 py-2 text-left font-semibold">Factor</th>
+                <th className="px-3 py-2 text-right font-semibold">Rate (%)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sorted.map((r) => (
+                <tr key={r.factor_key} className="border-t border-navy-100">
+                  <td className="px-3 py-2 text-navy-800">
+                    {r.label ?? r.factor_key}
+                  </td>
+                  <td
+                    className={`px-3 py-2 text-right tabular-nums font-medium ${
+                      r.rate < 0 ? 'text-neg' : r.rate > 0 ? 'text-pos' : 'text-gray-800'
+                    }`}
+                  >
+                    {r.rate >= 0 ? '+' : ''}{r.rate.toFixed(2)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
   );
 }
 

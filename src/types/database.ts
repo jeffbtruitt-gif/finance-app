@@ -343,6 +343,59 @@ export type Database = {
         Update: Partial<Database['public']['Tables']['tf_performance_rates']['Row']>;
         Relationships: EmptyRelationships;
       };
+      tf_performance_regressions: {
+        Row: {
+          id: string;
+          household_id: string;
+          account_id: string;
+          run_date: string;
+          regression_type: 'single' | 'multi';
+          period_months: number;
+          period_end: string;
+          alpha: number;
+          alpha_se: number;
+          alpha_pvalue: number;
+          beta_mkt: number;
+          beta_mkt_se: number;
+          beta_mkt_pvalue: number;
+          beta_smb: number | null;
+          beta_smb_se: number | null;
+          beta_smb_pvalue: number | null;
+          beta_hml: number | null;
+          beta_hml_se: number | null;
+          beta_hml_pvalue: number | null;
+          r_squared: number;
+          adj_r_squared: number;
+          n_observations: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          household_id: string;
+          account_id: string;
+          run_date: string;
+          regression_type: 'single' | 'multi';
+          period_months: number;
+          period_end: string;
+          alpha: number;
+          alpha_se: number;
+          alpha_pvalue: number;
+          beta_mkt: number;
+          beta_mkt_se: number;
+          beta_mkt_pvalue: number;
+          beta_smb?: number | null;
+          beta_smb_se?: number | null;
+          beta_smb_pvalue?: number | null;
+          beta_hml?: number | null;
+          beta_hml_se?: number | null;
+          beta_hml_pvalue?: number | null;
+          r_squared: number;
+          adj_r_squared: number;
+          n_observations: number;
+        };
+        Update: Partial<Database['public']['Tables']['tf_performance_regressions']['Row']>;
+        Relationships: EmptyRelationships;
+      };
       tf_balance_sheet_values: {
         Row: {
           id: string;
