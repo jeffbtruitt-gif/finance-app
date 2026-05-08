@@ -2435,7 +2435,7 @@ function FileTableRow({
         <td className="px-3 py-2 text-right tabular-nums">
           {ff ? ff.rowCount : 0}
         </td>
-        <td colSpan={3} className="px-3 py-2 text-center">
+        <td colSpan={4} className="px-3 py-2 text-center">
           {file.status === 'pending' && ff && onImportFamaFrench && (
             <button
               onClick={onImportFamaFrench}
