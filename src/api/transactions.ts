@@ -359,13 +359,6 @@ export async function fetchAccounts(): Promise<AccountOption[]> {
   return (data ?? []) as unknown as AccountOption[];
 }
 
-export async function updateAccountLink(accountId: string, link: string | null): Promise<void> {
-  const { error } = await supabase
-    .from('tf_accounts')
-    .update({ link } as never)
-    .eq('id', accountId);
-  if (error) throw error;
-}
 
 export interface CategoryOption {
   id: string;

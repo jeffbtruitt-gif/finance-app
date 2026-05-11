@@ -1,25 +1,31 @@
 /**
- * AccountLinksPanel — a slim vertical sidebar that sits beside the Import
- * page content. Shows quick-link buttons for each bank account that has a
- * URL configured, plus an inline editor to add/change/remove URLs.
- *
- * Designed to be placed as a flex sibling of the main page content so
- * users can jump to their bank website to download CSVs without leaving
- * the import flow.
+ * QuickLinksPanel — a slim vertical sidebar beside the Import page.
+ * Shows standalone quick-link bookmarks (name + URL) so users can jump
+ * to bank websites to download CSVs without leaving the import flow.
  */
 
 import { useState, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { fetchAccounts, updateAccountLink, type AccountOption } from '@/api/transactions';
+import { useHousehold } from '@/api/household';
+import {
+  fetchQuickLinks,
+  createQuickLink,
+  updateQuickLink,
+  deleteQuickLink,
+  type QuickLink,
+} from '@/api/quickLinks';
 
 export function AccountLinksPanel() {
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [adding, setAdding] = useState(false);
+  const household = useHousehold();
 
-  const accountsQ = useQuery({ queryKey: ['accounts'], queryFn: fetchAccounts });
-  const accounts = accountsQ.data ?? [];
-
-  const linked = accounts.filter((a) => a.link);
-  const unlinked = accounts.filter((a) => !a.link);
+  const linksQ = useQuery({
+    queryKey: ['quick-links', household?.id],
+    queryFn: () => fetchQuickLinks(household!.id),
+    enabled: !!household?.id,
+  });
+  const links = linksQ.data ?? [];
 
   return (
     <aside className="quick-links-panel">
@@ -32,69 +38,78 @@ export function AccountLinksPanel() {
       </p>
 
       <div className="quick-links-list">
-        {accountsQ.isLoading && (
+        {linksQ.isLoading && (
           <div className="px-3 py-2 text-xs text-gray-400">Loading…</div>
         )}
 
-        {linked.map((acct) => (
-          <AccountLinkRow
-            key={acct.id}
-            account={acct}
-            isEditing={editingId === acct.id}
-            onEdit={() => setEditingId(editingId === acct.id ? null : acct.id)}
-            onDone={() => setEditingId(null)}
-          />
-        ))}
+        {links.map((link) =>
+          editingId === link.id ? (
+            <div key={link.id} className="px-3 py-1">
+              <LinkEditor
+                link={link}
+                householdId={household!.id}
+                onDone={() => setEditingId(null)}
+              />
+            </div>
+          ) : (
+            <QuickLinkRow
+              key={link.id}
+              link={link}
+              onEdit={() => setEditingId(link.id)}
+            />
+          ),
+        )}
 
-        {linked.length === 0 && !accountsQ.isLoading && (
+        {links.length === 0 && !linksQ.isLoading && (
           <div className="px-3 py-2 text-xs text-gray-400" style={{ lineHeight: 1.45 }}>
             No links yet — use the button below to add a bank URL.
           </div>
         )}
       </div>
 
-      {unlinked.length > 0 && (
-        <AddLinkSection
-          accounts={unlinked}
-          editingId={editingId}
-          onStartEdit={(id) => setEditingId(id)}
-          onDone={() => setEditingId(null)}
-        />
+      {adding ? (
+        <div className="px-3 py-2">
+          <LinkEditor
+            householdId={household!.id}
+            onDone={() => setAdding(false)}
+          />
+        </div>
+      ) : (
+        <div className="quick-links-add-wrap">
+          <button
+            type="button"
+            className="quick-links-add-btn"
+            onClick={() => setAdding(true)}
+            title="Add link"
+            aria-label="Add link"
+          >
+            <PlusIcon />
+            <span>Add link…</span>
+          </button>
+        </div>
       )}
     </aside>
   );
 }
 
-function AccountLinkRow({
-  account,
-  isEditing,
+function QuickLinkRow({
+  link,
   onEdit,
-  onDone,
 }: {
-  account: AccountOption;
-  isEditing: boolean;
+  link: QuickLink;
   onEdit: () => void;
-  onDone: () => void;
 }) {
-  if (isEditing) {
-    return (
-      <div className="px-3 py-1">
-        <LinkEditor account={account} onDone={onDone} />
-      </div>
-    );
-  }
-
   return (
     <div className="quick-link-row">
       <a
-        href={account.link!}
+        href={link.url}
         target="_blank"
         rel="noopener noreferrer"
-        title={`Open ${account.name}`}
+        title={`Open ${link.name}`}
         className="quick-link-anchor"
       >
         <BankIcon />
-        <span className="quick-link-label">{account.name}</span>
+        <span className="quick-link-label">{link.name}</span>
         <ArrowOutIcon />
       </a>
       <button
@@ -102,7 +117,7 @@ function AccountLinkRow({
         className="quick-link-edit-btn"
         onClick={onEdit}
         title="Edit link"
-        aria-label={`Edit link for ${account.name}`}
+        aria-label={`Edit link for ${link.name}`}
       >
         <PencilIcon />
       </button>
@@ -110,116 +125,70 @@ function AccountLinkRow({
   );
 }
 
-function AddLinkSection({
-  accounts,
-  editingId,
-  onStartEdit,
-  onDone,
-}: {
-  accounts: AccountOption[];
-  editingId: string | null;
-  onStartEdit: (id: string) => void;
-  onDone: () => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const dropRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    function handleClick(e: MouseEvent) {
-      if (dropRef.current && !dropRef.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    }
-    document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
-  }, [open]);
-
-  const editingAccount = accounts.find((a) => a.id === editingId);
-  if (editingAccount) {
-    return (
-      <div className="px-3 py-2">
-        <LinkEditor account={editingAccount} onDone={onDone} />
-      </div>
-    );
-  }
-
-  return (
-    <div ref={dropRef} className="quick-links-add-wrap">
-      <button
-        type="button"
-        className="quick-links-add-btn"
-        onClick={() => setOpen(!open)}
-        title="Add account link"
-        aria-label="Add account link"
-      >
-        <PlusIcon />
-        <span>Add link…</span>
-      </button>
-
-      {open && (
-        <div className="quick-links-dropdown">
-          <div className="quick-links-dropdown-title">Choose Account</div>
-          {accounts.map((a) => (
-            <button
-              key={a.id}
-              type="button"
-              className="quick-links-dropdown-item"
-              onClick={() => {
-                setOpen(false);
-                onStartEdit(a.id);
-              }}
-            >
-              {a.name}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
 function LinkEditor({
-  account,
+  link,
+  householdId,
   onDone,
 }: {
-  account: AccountOption;
+  link?: QuickLink;
+  householdId: string;
   onDone: () => void;
 }) {
-  const [url, setUrl] = useState(account.link ?? '');
-  const inputRef = useRef<HTMLInputElement>(null);
+  const [name, setName] = useState(link?.name ?? '');
+  const [url, setUrl] = useState(link?.url ?? '');
+  const nameRef = useRef<HTMLInputElement>(null);
   const queryClient = useQueryClient();
 
   useEffect(() => {
-    inputRef.current?.focus();
+    nameRef.current?.focus();
   }, []);
 
-  const mutation = useMutation({
-    mutationFn: (newLink: string | null) => updateAccountLink(account.id, newLink),
+  const saveMutation = useMutation({
+    mutationFn: async () => {
+      if (link) {
+        await updateQuickLink(link.id, { name, url });
+      } else {
+        await createQuickLink({ household_id: householdId, name, url });
+      }
+    },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['accounts'] });
+      queryClient.invalidateQueries({ queryKey: ['quick-links'] });
       onDone();
     },
   });
 
-  function handleSave() {
-    const trimmed = url.trim();
-    let normalized = trimmed || null;
-    if (normalized && !/^https?:\/\//i.test(normalized)) {
-      normalized = 'https://' + normalized;
-    }
-    mutation.mutate(normalized);
-  }
+  const deleteMutation = useMutation({
+    mutationFn: () => deleteQuickLink(link!.id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['quick-links'] });
+      onDone();
+    },
+  });
 
-  function handleRemove() {
-    mutation.mutate(null);
+  const isPending = saveMutation.isPending || deleteMutation.isPending;
+  const canSave = name.trim() && url.trim();
+
+  function handleSave() {
+    if (!canSave) return;
+    saveMutation.mutate();
   }
 
   return (
     <div className="link-editor">
-      <div className="link-editor-name">{account.name}</div>
       <input
-        ref={inputRef}
+        ref={nameRef}
+        type="text"
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') handleSave();
+          if (e.key === 'Escape') onDone();
+        }}
+        placeholder="Link name"
+        className="link-editor-input"
+        style={{ marginBottom: 4 }}
+      />
+      <input
         type="url"
         value={url}
         onChange={(e) => setUrl(e.target.value)}
@@ -235,18 +204,18 @@ function LinkEditor({
           type="button"
           className="link-editor-save"
           onClick={handleSave}
-          disabled={mutation.isPending}
+          disabled={isPending || !canSave}
         >
-          {mutation.isPending ? '…' : 'Save'}
+          {isPending ? '…' : 'Save'}
         </button>
-        {account.link && (
+        {link && (
           <button
             type="button"
             className="link-editor-remove"
-            onClick={handleRemove}
-            disabled={mutation.isPending}
+            onClick={() => deleteMutation.mutate()}
+            disabled={isPending}
           >
-            Remove
+            Delete
           </button>
         )}
         <button type="button" className="link-editor-cancel" onClick={onDone}>

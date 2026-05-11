@@ -334,60 +334,10 @@
     color: theme('colors.navy.700');
   }
 
-  .quick-links-dropdown {
-    position: absolute;
-    left: 6px;
-    right: 6px;
-    bottom: 100%;
-    margin-bottom: 4px;
-    z-index: 50;
-    background: white;
-    border: 1px solid theme('colors.navy.100');
-    border-radius: 8px;
-    box-shadow: 0 4px 8px rgba(13, 21, 39, 0.06), 0 12px 24px rgba(13, 21, 39, 0.06);
-    padding: 4px 0;
-    max-height: 200px;
-    overflow-y: auto;
-  }
-  .quick-links-dropdown-title {
-    padding: 5px 10px 3px;
-    font-size: 10px;
-    font-weight: 700;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: theme('colors.gray.400');
-  }
-  .quick-links-dropdown-item {
-    display: block;
-    width: 100%;
-    text-align: left;
-    padding: 5px 10px;
-    border: none;
-    background: none;
-    font-family: 'Figtree', 'Inter', system-ui, sans-serif;
-    font-size: 12.5px;
-    font-weight: 500;
-    color: theme('colors.navy.700');
-    cursor: pointer;
-    transition: background-color 0.1s;
-  }
-  .quick-links-dropdown-item:hover {
-    background-color: theme('colors.navy.50');
-  }
-
   .link-editor {
     background: theme('colors.navy.50');
     border-radius: 6px;
     padding: 8px;
-  }
-  .link-editor-name {
-    font-size: 11px;
-    font-weight: 600;
-    color: theme('colors.navy.700');
-    margin-bottom: 4px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
   }
   .link-editor-input {
     display: block;
