@@ -91,6 +91,12 @@ export function Sparkline({
           r={2.5}
           fill={color}
         />
+        {/* invisible hover targets for tooltips */}
+        {xy.map((pt, i) => (
+          <circle key={i} cx={pt.x} cy={pt.y} r={6} fill="transparent">
+            <title>{`${pt.p.label}: ${fmtUsd(pt.p.value)}`}</title>
+          </circle>
+        ))}
       </svg>
       {showEndpointLabels && (
         <div className="mt-1 flex justify-between text-[11px] text-gray-500">

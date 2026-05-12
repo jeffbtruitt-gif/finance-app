@@ -185,6 +185,31 @@
     font-variant-numeric: tabular-nums;
   }
 
+  /* Dashboard section headings — gold under-line accent on title text. */
+  .ds-heading-accent {
+    position: relative;
+    display: inline-block;
+    padding-bottom: 4px;
+  }
+  .ds-heading-accent::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    width: 32px;
+    height: 3px;
+    border-radius: 2px;
+    background-color: theme('colors.gold.500');
+  }
+
+  /* Hero KPI display numerals — Space Grotesk, heavy weight, tight tracking. */
+  .kpi-display {
+    font-family: 'Space Grotesk', 'Figtree', system-ui, sans-serif;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
+  }
+
   .drop-indicator {
     height: 2px;
     background: #3b559a;

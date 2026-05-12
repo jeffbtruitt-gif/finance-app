@@ -20,6 +20,12 @@ import { EquityMixDonutChart } from '@/components/EquityMixDonutChart';
 import { StatusPanel } from '@/components/StatusPanel';
 import { Card, RT } from '@/components/ds';
 
+/** December of the prior year — used as the baseline for YTD change. */
+function ytdBaseline(p: Period): Period {
+  return { year: p.year - 1, month: 12 };
+}
+
+
 type ReportTab = 'balance' | 'mix' | 'changeBar' | 'changeTable';
 
 function deltaClassForAsset(delta: number | null): string {
@@ -84,6 +90,24 @@ export function BalanceSheetReportPage() {
       asOf: priorPeriod,
     });
   }, [itemsQ.data, valuesQ.data, priorPeriod]);
+
+  const ytdBasePeriod = useMemo(() => ytdBaseline(period), [period]);
+
+  const ytdBaseReport = useMemo(() => {
+    if (!itemsQ.data || !valuesQ.data) return null;
+    return buildBalanceSheetReport({
+      items: itemsQ.data,
+      values: valuesQ.data,
+      asOf: ytdBasePeriod,
+    });
+  }, [itemsQ.data, valuesQ.data, ytdBasePeriod]);
+
+  const liabilityNames = useMemo(() => {
+    if (!report) return [];
+    return report.liabilities
+      .filter((l) => l.value != null && l.value > 0)
+      .map((l) => l.name);
+  }, [report]);
 
   const baselinePeriod = useMemo(() => baselinePeriodForHorizon(period, horizon), [period, horizon]);
 
@@ -196,7 +220,7 @@ export function BalanceSheetReportPage() {
         />
       )}
 
-      {!loading && !firstError && hasItems && report && priorReport && netWorthSeries24 && (
+      {!loading && !firstError && hasItems && report && priorReport && ytdBaseReport && netWorthSeries24 && (
         <div className="space-y-6">
           <NetWorthHeaderCard
             totals={{
@@ -209,8 +233,15 @@ export function BalanceSheetReportPage() {
               liabilities: priorReport.totalLiabilities,
               net: priorReport.netWorth,
             }}
+            totalsYtdStart={{
+              assets: ytdBaseReport.totalAssets,
+              liabilities: ytdBaseReport.totalLiabilities,
+              net: ytdBaseReport.netWorth,
+            }}
             period={period}
             series={netWorthSeries24}
+            equityByGroup={report.equityByGroup}
+            liabilityNames={liabilityNames}
           />
 
           {tab === 'balance' && (

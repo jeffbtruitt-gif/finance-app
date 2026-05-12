@@ -1,15 +1,16 @@
 /**
  * Dashboard — Phase 5 (restyled May 2026 to Truitt Finance Design System v1.0).
  *
- * The home page. Loads in-place when you log in and answers the four
- * questions the spreadsheet's "Main 2" tab answers every Sunday morning:
- *
- *   - Are we on budget this month / YTD?  (spend vs budget cards)
- *   - Income / savings / tax / expense shape from Assumptions (waterfalls).
- *   - Where does net worth stand?         (net worth card + 24-mo line)
- *
- * Plus a small free-text Goals list so the dashboard surfaces the
- * *why*, not just the numbers.
+ * The home page. Section order (per DASHBOARD_SPEC §3):
+ *   1. Opening sentence
+ *   2. Hero 3-up KPI strip (This month · Savings rate · YTD)
+ *   3. Needs your attention (3-up callouts)
+ *   4. Spending (Top categories + Monthly trend)
+ *   5. Cashflow & Bills (YTD by group + Bills quick-links)
+ *   6. Yearly bucket (By category + Budget vs reforecast)
+ *   7. Balance sheet allocation (donut + legend)
+ *   8. Assumptions snapshot (projection + actual waterfalls)
+ *   9. Plans (Upcoming trips + Goals)
  */
 
 import { useEffect, useMemo, useState } from 'react';
@@ -39,25 +40,44 @@ import {
   fetchHouseholdSettings,
   saveHouseholdSettings,
 } from '@/api/balanceSheet';
+import { fetchBills } from '@/api/bills';
+import { fetchTrips } from '@/api/trips';
+import {
+  fetchAllocations,
+  ALLOCATION_CATEGORIES,
+  CATEGORY_LABELS,
+  type AllocationCategory,
+} from '@/api/bsAllocations';
+import { fetchTransactionCountSummary } from '@/api/transactions';
 import {
   effectiveValuesAt,
-  netWorthSeries,
   periodToBsMonth,
 } from '@/features/balance-sheet/effective';
-import { fmtUsd, fmtPct, varianceClass } from '@/lib/money';
+import { fmtUsd, fmtPct, fmtMoney, varianceClass } from '@/lib/money';
 import { usePrivacyMode } from '@/lib/privacyModeContext';
 import { maskUsd, PRIVACY_TEXT_PLACEHOLDER } from '@/lib/privacyMoney';
-import { formatPeriod, type Period } from '@/lib/period';
-import { DashboardSpendGroupBarChart } from '@/components/DashboardSpendGroupBarChart';
-import { DashboardYearlyTwoBarChart } from '@/components/DashboardYearlyTwoBarChart';
+import {
+  formatPeriod,
+  shiftPeriod,
+  periodKey,
+  type Period,
+} from '@/lib/period';
+import { useReforecastDraftStatus } from '@/lib/useReforecastDraftStatus';
+import { categoryColorHex } from '@/components/ds/CategoryChip';
+import { HorizontalCategoryBars } from '@/components/HorizontalCategoryBars';
+import { MonthlyTrendBars } from '@/components/MonthlyTrendBars';
+import { VerticalGroupedBars } from '@/components/VerticalGroupedBars';
+import { DonutChart } from '@/components/DonutChart';
+import { BillsQuickLinks } from '@/components/BillsQuickLinks';
+import { TripsQuickLinks } from '@/components/TripsQuickLinks';
 import { StatusPanel } from '@/components/StatusPanel';
-import { Sparkline } from '@/components/Sparkline';
 import { WaterfallChart } from '@/components/WaterfallChart';
 import { Badge, Button, Card } from '@/components/ds';
 import { useAssumptionsWaterfalls } from '@/features/assumptions/useAssumptionsWaterfalls';
 import {
   buildSpendReport,
   yearlySpendCategoriesOnly,
+  canonicalSpendGroup,
   type SpendGroup,
 } from '@/features/reports/grouping';
 import {
@@ -66,15 +86,30 @@ import {
   sumBudgetFullYearForCategory,
   sumSpendBudgetYearTotal,
 } from '@/features/budget/reforecastProjectedGrand';
+import { SectionTitle } from './SectionTitle';
+import { AttentionInbox, type AttentionSignal } from './AttentionInbox';
 
-
-/** Spend-group axis labels (aligned with reports / grouping canonical names). */
 const DASHBOARD_SPEND_GROUP_LABEL: Record<SpendGroup, string> = {
   'Rent & House Maintenance': 'Rent & utilities',
   'Food & Car': 'Food & car',
-  'Other': 'Other',
-  'Yearly': 'Yearly',
+  Other: 'Other',
+  Yearly: 'Yearly',
 };
+
+const DS_ALLOC_COLORS: Record<AllocationCategory, string> = {
+  us_stocks: '#243460',
+  intl_stocks: '#3b559a',
+  fixed_income: '#c9a84c',
+  real_estate: '#1e7e5a',
+  cash: '#7a8aa8',
+};
+
+function compactUsd(n: number): string {
+  const abs = Math.abs(n);
+  if (abs >= 1_000_000) return '$' + fmtMoney(n / 1_000_000, { decimals: 2 }) + 'M';
+  if (abs >= 1_000) return '$' + fmtMoney(n / 1_000) + 'K';
+  return '$' + fmtMoney(n);
+}
 
 function spendGroupBarSeries(d: DashboardData, periods: Period[]) {
   const actualsLookup = actualsToLookup(d.monthlyRows);
@@ -99,6 +134,7 @@ export function DashboardPage() {
   const { period: thisMonth } = useAppPeriod();
   const defaultPeriod = useDefaultPeriod();
 
+  // ── core queries ────────────────────────────────────────────────────
   const schemeQ = useQuery({
     queryKey: defaultSchemeQueryKey(household?.id),
     enabled: !!household?.id,
@@ -132,8 +168,35 @@ export function DashboardPage() {
     queryFn: () => fetchHouseholdSettings(household!.id),
   });
 
-  const assumptionsWf = useAssumptionsWaterfalls(thisMonth.year, thisMonth);
+  const billsQ = useQuery({
+    queryKey: ['bills', household?.id],
+    enabled: !!household?.id,
+    queryFn: () => fetchBills(household!.id),
+  });
 
+  const tripsQ = useQuery({
+    queryKey: ['trips', household?.id],
+    enabled: !!household?.id,
+    queryFn: () => fetchTrips(household!.id),
+  });
+
+  const allocQ = useQuery({
+    queryKey: ['bs-allocations', household?.id],
+    enabled: !!household?.id,
+    queryFn: () => fetchAllocations(household!.id),
+  });
+
+  const uncatQ = useQuery({
+    queryKey: ['txn-count-summary', schemeQ.data],
+    enabled: !!schemeQ.data,
+    queryFn: () =>
+      fetchTransactionCountSummary({ filters: {}, schemeId: schemeQ.data! }),
+  });
+
+  const assumptionsWf = useAssumptionsWaterfalls(thisMonth.year, thisMonth);
+  const { hasDrafts: reforecastHasDrafts } = useReforecastDraftStatus();
+
+  // ── yearly budget queries ────────────────────────────────────────────
   const yearlyFYActualsQ = useQuery({
     queryKey: ['dashboard-yearly-fy-actuals', household?.id, schemeQ.data, thisMonth.year],
     enabled: !!household?.id && !!schemeQ.data,
@@ -153,10 +216,8 @@ export function DashboardPage() {
       fetchAllRevisedForYear({ household_id: household!.id, year: thisMonth.year }),
   });
 
-  const yearlyBudgetCompareError =
-    reforecastYearDashQ.error ?? yearlyFYActualsQ.error;
+  const yearlyBudgetCompareError = reforecastYearDashQ.error ?? yearlyFYActualsQ.error;
 
-  /** Latest-transaction month for full-year reforecast blend — independent of header period. */
   const reforecastAsOfSystem = useMemo(() => {
     const lp = defaultPeriod.period;
     const y = thisMonth.year;
@@ -165,54 +226,95 @@ export function DashboardPage() {
     return lp.month;
   }, [defaultPeriod.period, thisMonth.year]);
 
-  const items = itemsQ.data ?? [];
-  const values = valuesQ.data ?? [];
+  // ── 6-month spend trend ────────────────────────────────────────────
+  const trailing6 = useMemo(() => {
+    const out: Period[] = [];
+    for (let i = 5; i >= 0; i--) out.push(shiftPeriod(thisMonth, -i));
+    return out;
+  }, [thisMonth]);
 
+  const monthlyActuals6Q = useQuery({
+    queryKey: [
+      'dashboard-6mo-actuals',
+      household?.id,
+      schemeQ.data,
+      periodKey(trailing6[0]),
+      periodKey(thisMonth),
+    ],
+    enabled: !!household?.id && !!schemeQ.data,
+    queryFn: () =>
+      fetchMonthlyActuals({
+        household_id: household!.id,
+        scheme_id: schemeQ.data!,
+        from: trailing6[0],
+        to: thisMonth,
+      }),
+  });
+
+  // ── derived calcs ────────────────────────────────────────────────────
   const calc = useMemo(() => {
     if (!dashQ.data) return null;
     const d = dashQ.data;
-
-    const monthSums = sumByGroup({
-      rows: d.monthlyRows,
-      categories: d.categories,
-      periods: [d.thisMonth],
-    });
-    const ytdSums = sumByGroup({
-      rows: d.monthlyRows,
-      categories: d.categories,
-      periods: d.ytd,
-    });
-    const t12Sums = sumByGroup({
-      rows: d.monthlyRows,
-      categories: d.categories,
-      periods: d.trailing12,
-    });
-    const monthBudget = rollupBudget({
-      rows: d.budgetRows,
-      categories: d.categories,
-      periods: [d.thisMonth],
-    });
-    const ytdBudget = rollupBudget({
-      rows: d.budgetRows,
-      categories: d.categories,
-      periods: d.ytd,
-    });
-
-    return { monthSums, ytdSums, t12Sums, monthBudget, ytdBudget };
+    const monthSums = sumByGroup({ rows: d.monthlyRows, categories: d.categories, periods: [d.thisMonth] });
+    const ytdSums = sumByGroup({ rows: d.monthlyRows, categories: d.categories, periods: d.ytd });
+    const monthBudget = rollupBudget({ rows: d.budgetRows, categories: d.categories, periods: [d.thisMonth] });
+    const ytdBudget = rollupBudget({ rows: d.budgetRows, categories: d.categories, periods: d.ytd });
+    return { monthSums, ytdSums, monthBudget, ytdBudget };
   }, [dashQ.data]);
 
-  const spendGroupMonthly = useMemo(
-    () =>
-      dashQ.data ? spendGroupBarSeries(dashQ.data, [dashQ.data.thisMonth]) : [],
-    [dashQ.data],
-  );
+  // ── top categories (current month) ──────────────────────────────────
+  const topCategories = useMemo(() => {
+    if (!dashQ.data) return [];
+    const d = dashQ.data;
+    const lookup = actualsToLookup(d.monthlyRows);
+    const pk = periodKey(thisMonth);
+    return d.categories
+      .filter((c) => canonicalSpendGroup(c.group_name) != null)
+      .map((c) => ({
+        key: c.id,
+        label: c.name,
+        value: lookup.get(`${c.id}|${pk}`) ?? 0,
+        color: c.color_override ?? categoryColorHex(c.name),
+      }))
+      .filter((c) => c.value > 0)
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 12);
+  }, [dashQ.data, thisMonth]);
 
-  const spendGroupYtd = useMemo(
-    () => (dashQ.data ? spendGroupBarSeries(dashQ.data, dashQ.data.ytd) : []),
-    [dashQ.data],
-  );
+  // ── spend trend 6 months ────────────────────────────────────────────
+  const spendTrend6 = useMemo(() => {
+    if (!monthlyActuals6Q.data || !dashQ.data) return [];
+    const lookup = actualsToLookup(monthlyActuals6Q.data);
+    const spendCatIds = new Set(
+      dashQ.data.categories
+        .filter((c) => canonicalSpendGroup(c.group_name) != null)
+        .map((c) => c.id),
+    );
+    return trailing6.map((p) => {
+      let total = 0;
+      const pk = periodKey(p);
+      for (const cid of spendCatIds) {
+        total += lookup.get(`${cid}|${pk}`) ?? 0;
+      }
+      const isCurrent = p.year === thisMonth.year && p.month === thisMonth.month;
+      return {
+        key: pk,
+        label: formatPeriod(p, 'short').split(' ')[0],
+        value: total,
+        current: isCurrent,
+      };
+    });
+  }, [monthlyActuals6Q.data, dashQ.data, trailing6, thisMonth]);
 
-  /** Yearly-section categories: actual YTD through header month vs full-year budget per category. */
+  // ── YTD by group (3 groups, no Yearly) ──────────────────────────────
+  const ytdGroups3 = useMemo(() => {
+    if (!dashQ.data) return [];
+    return spendGroupBarSeries(dashQ.data, dashQ.data.ytd).filter(
+      (g) => g.key !== 'Yearly',
+    );
+  }, [dashQ.data]);
+
+  // ── yearly expense items ────────────────────────────────────────────
   const yearlyExpenseItemsBarData = useMemo(() => {
     if (!dashQ.data) return [];
     const cats = yearlySpendCategoriesOnly(dashQ.data.categories);
@@ -229,15 +331,9 @@ export function DashboardPage() {
     }));
   }, [dashQ.data, thisMonth.year, thisMonth.month]);
 
-  /** Full FY yearly bucket: original budget vs reforecast projected (does not use header month). */
+  // ── yearly budget vs reforecast ──────────────────────────────────────
   const yearlyBudgetVsReforecast = useMemo(() => {
-    if (
-      !dashQ.data ||
-      yearlyFYActualsQ.data === undefined ||
-      reforecastYearDashQ.data === undefined
-    ) {
-      return null;
-    }
+    if (!dashQ.data || yearlyFYActualsQ.data === undefined || reforecastYearDashQ.data === undefined) return null;
     const cats = yearlySpendCategoriesOnly(dashQ.data.categories);
     if (cats.length === 0) return { budget: 0, reforecast: 0 };
     const budgetLookup = budgetsToLookup(dashQ.data.budgetRows as BudgetRow[]);
@@ -252,64 +348,101 @@ export function DashboardPage() {
       revisedAll: reforecastYearDashQ.data,
     });
     return { budget: budgetTotal, reforecast: reforecastTotal };
-  }, [
-    dashQ.data,
-    yearlyFYActualsQ.data,
-    reforecastYearDashQ.data,
-    thisMonth.year,
-    reforecastAsOfSystem,
-  ]);
+  }, [dashQ.data, yearlyFYActualsQ.data, reforecastYearDashQ.data, thisMonth.year, reforecastAsOfSystem]);
 
-  const nw = useMemo(() => {
-    if (!items.length) return null;
+  // ── BS allocation donut ──────────────────────────────────────────────
+  const allocDonutSlices = useMemo(() => {
+    const items = itemsQ.data ?? [];
+    const values = valuesQ.data ?? [];
+    const allocs = allocQ.data ?? [];
+    if (items.length === 0) return [];
+
     const curIso = periodToBsMonth(thisMonth);
-    const priorPeriod: Period =
-      thisMonth.month === 1
-        ? { year: thisMonth.year - 1, month: 12 }
-        : { year: thisMonth.year, month: thisMonth.month - 1 };
-    const priorIso = periodToBsMonth(priorPeriod);
-    const startOfYearIso = periodToBsMonth({ year: thisMonth.year, month: 1 });
+    const eff = effectiveValuesAt(values, curIso);
 
-    const totalAt = (iso: string) => {
-      const eff = effectiveValuesAt(values, iso);
-      let assets = 0;
-      let liab = 0;
-      for (const it of items) {
-        if (!it.is_active) continue;
-        const v = eff.get(it.id);
-        if (v == null) continue;
-        if (it.type === 'asset') assets += v;
-        else liab += v;
-      }
-      return { assets, liab, net: assets - liab };
+    const totals: Record<AllocationCategory, number> = {
+      us_stocks: 0,
+      intl_stocks: 0,
+      fixed_income: 0,
+      real_estate: 0,
+      cash: 0,
     };
 
-    const cur = totalAt(curIso);
-    const prior = totalAt(priorIso);
-    const soy = totalAt(startOfYearIso);
+    for (const item of items) {
+      if (!item.is_active || item.type !== 'asset') continue;
+      const balance = eff.get(item.id);
+      if (balance == null) continue;
+      const itemAllocs = allocs.filter((a) => a.item_id === item.id);
+      if (itemAllocs.length === 0) {
+        totals.cash += balance;
+        continue;
+      }
+      for (const a of itemAllocs) {
+        totals[a.category] += balance * (a.percentage / 100);
+      }
+    }
 
-    const series = netWorthSeries({
-      items,
-      values,
-      endMonth: thisMonth,
-      count: 24,
-    });
+    return ALLOCATION_CATEGORIES.map((cat) => ({
+      key: cat,
+      label: CATEGORY_LABELS[cat],
+      value: Math.round(totals[cat]),
+      color: DS_ALLOC_COLORS[cat],
+    })).filter((s) => s.value > 0);
+  }, [itemsQ.data, valuesQ.data, allocQ.data, thisMonth]);
 
-    return { cur, prior, soy, series };
-  }, [items, values, thisMonth]);
+  const allocTotal = allocDonutSlices.reduce((s, i) => s + i.value, 0);
 
+  // ── attention inbox signals ──────────────────────────────────────────
+  const attentionSignals = useMemo(() => {
+    const signals: AttentionSignal[] = [];
+    const uncat = uncatQ.data?.uncategorized ?? 0;
+    if (uncat > 0) {
+      signals.push({
+        key: 'uncategorized',
+        tone: 'warn',
+        title: `${uncat} uncategorized`,
+        detail: `Transaction${uncat === 1 ? '' : 's'} without a category`,
+        cta: 'Categorize',
+        to: '/transactions',
+      });
+    }
+    if (calc && calc.ytdSums.yearlySpend > calc.ytdBudget.yearlySpend) {
+      signals.push({
+        key: 'yearly-over',
+        tone: 'neg',
+        title: 'Yearly bucket over',
+        detail: 'YTD yearly spend exceeds budget',
+        cta: 'View details',
+        to: '/reports/balance-sheet',
+      });
+    }
+    if (reforecastHasDrafts) {
+      signals.push({
+        key: 'reforecast-drafts',
+        tone: 'info',
+        title: 'Unsaved reforecast',
+        detail: 'Draft edits waiting to be saved',
+        cta: 'Open reforecast',
+        to: '/reforecast',
+      });
+    }
+    return signals;
+  }, [uncatQ.data, calc, reforecastHasDrafts]);
+
+  // ── loading / error ──────────────────────────────────────────────────
   const loading =
-    schemeQ.isLoading ||
-    dashQ.isLoading ||
-    itemsQ.isLoading ||
-    valuesQ.isLoading ||
-    settingsQ.isLoading;
-  const firstError =
-    schemeQ.error ?? dashQ.error ?? itemsQ.error ?? valuesQ.error ?? settingsQ.error;
+    schemeQ.isLoading || dashQ.isLoading || itemsQ.isLoading || valuesQ.isLoading || settingsQ.isLoading;
+  const firstError = schemeQ.error ?? dashQ.error ?? itemsQ.error ?? valuesQ.error ?? settingsQ.error;
+
+  const { hideIncomeAssets } = usePrivacyMode();
+  const $ = (n: number, sensitive = false) => maskUsd(hideIncomeAssets, n, sensitive);
+
+  const todayIso = useMemo(() => new Date().toISOString().slice(0, 10), []);
 
   return (
-    <div>
-      <p className="mb-6 text-body-base text-gray-500">
+    <div className="space-y-8">
+      {/* ── §1 Opening sentence ─────────────────────────────────────── */}
+      <p className="text-body-base text-gray-500">
         Sunday-morning view. Anchored on{' '}
         <span className="font-medium text-gray-700">{formatPeriod(thisMonth)}</span>
         — matches the period in the header.
@@ -318,221 +451,394 @@ export function DashboardPage() {
       {firstError ? (
         <StatusPanel
           kind="error"
-          message="Couldn’t load dashboard"
+          message="Couldn't load dashboard"
           detail={firstError instanceof Error ? firstError.message : undefined}
         />
       ) : loading ? (
         <StatusPanel kind="loading" message="Loading dashboard…" />
       ) : (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <>
+          {/* ── §2 Hero 3-up KPI strip ────────────────────────────── */}
           {calc && (
-            <>
-              <ProgressCard
-                title="This month"
-                subtitle={`Spend vs budget — ${formatPeriod(thisMonth, 'short')}`}
+            <section className="grid grid-cols-1 gap-4 lg:grid-cols-4">
+              <HeroThisMonth
                 actual={calc.monthSums.spend}
                 budget={calc.monthBudget.spend}
-                actualLabel="Spent"
-                budgetLabel="Budget"
+                period={thisMonth}
               />
-              <ProgressCard
-                title="YTD"
-                subtitle={`Year-to-date spend vs budget — ${thisMonth.year}`}
+              <SavingsRateCard
+                pct={assumptionsWf.actualSavingsRatePct}
+                year={thisMonth.year}
+                loading={assumptionsWf.loading}
+                error={assumptionsWf.error}
+              />
+              <YtdCard
                 actual={calc.ytdSums.spend}
                 budget={calc.ytdBudget.spend}
-                actualLabel="Spent"
-                budgetLabel="Budget"
+                year={thisMonth.year}
               />
-              <ProgressCard
-                title="Yearly bucket"
-                subtitle="Insurance / property tax / subs / charity (YTD)"
-                actual={calc.ytdSums.yearlySpend}
-                budget={calc.ytdBudget.yearlySpend}
-                actualLabel="Spent"
-                budgetLabel="Budget"
-              />
-            </>
+            </section>
           )}
 
+          {/* ── §3 Needs your attention ───────────────────────────── */}
+          {attentionSignals.length > 0 && (
+            <section>
+              <SectionTitle
+                kicker="Inbox"
+                title="Needs your attention"
+              />
+              <AttentionInbox signals={attentionSignals} />
+            </section>
+          )}
+
+          {/* ── §4 Spending ───────────────────────────────────────── */}
           {dashQ.data && (
-            <section className="col-span-1 grid grid-cols-1 gap-4 md:col-span-2 xl:col-span-3 lg:grid-cols-2">
-              <Card padded={false}>
-                <Card.Header
-                  title="Monthly budget"
-                  subtitle={`Actual vs budget by group · ${formatPeriod(thisMonth, 'short')}`}
-                />
-                <Card.Section>
-                  <DashboardSpendGroupBarChart
-                    data={spendGroupMonthly}
-                    caption={`Monthly budget ${formatPeriod(thisMonth)}`}
+            <section>
+              <SectionTitle
+                kicker="Spending"
+                title="Where the money goes"
+                subtitle={`${formatPeriod(thisMonth, 'short')} ${thisMonth.year}`}
+              />
+              <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                <Card padded={false}>
+                  <Card.Header
+                    title="Top categories"
+                    subtitle={formatPeriod(thisMonth, 'short')}
                   />
-                </Card.Section>
-              </Card>
-              <Card padded={false}>
-                <Card.Header
-                  title="Year to date"
-                  subtitle={`Jan–${formatPeriod(thisMonth, 'short')} ${thisMonth.year} · by group`}
-                />
-                <Card.Section>
-                  <DashboardSpendGroupBarChart
-                    data={spendGroupYtd}
-                    caption={`Year to date through ${formatPeriod(thisMonth)}`}
+                  <Card.Section>
+                    <HorizontalCategoryBars items={topCategories} />
+                  </Card.Section>
+                </Card>
+                <Card padded={false}>
+                  <Card.Header
+                    title="Monthly spend"
+                    subtitle="Last 6 months"
                   />
-                </Card.Section>
-              </Card>
-            </section>
-          )}
-
-          {dashQ.data && yearlyExpenseItemsBarData.length > 0 && (
-            <section className="col-span-1 grid grid-cols-1 gap-4 md:col-span-2 xl:col-span-3 lg:grid-cols-2">
-              <Card padded={false}>
-                <Card.Header
-                  title="Yearly expense items"
-                  subtitle={`Actual YTD through ${formatPeriod(thisMonth, 'short')} vs full-year budget · by category`}
-                />
-                <Card.Section>
-                  <DashboardSpendGroupBarChart
-                    data={yearlyExpenseItemsBarData}
-                    caption={`Yearly items — YTD ${formatPeriod(thisMonth)} vs budget`}
-                    showValuesAboveBars
-                  />
-                </Card.Section>
-              </Card>
-              <Card padded={false}>
-                <Card.Header
-                  title="Yearly budget"
-                  subtitle={
-                    <>
-                      Full {thisMonth.year} totals from Budget vs Reforecast (saved snapshot). Does not
-                      change when you move the header period — uses latest transaction month for the
-                      reforecast blend.
-                    </>
-                  }
-                />
-                <Card.Section>
-                  {yearlyBudgetCompareError ? (
-                    <StatusPanel
-                      kind="error"
-                      message="Couldn’t load yearly budget comparison"
-                      detail={
-                        yearlyBudgetCompareError instanceof Error
-                          ? yearlyBudgetCompareError.message
-                          : undefined
-                      }
-                    />
-                  ) : yearlyFYActualsQ.isLoading ||
-                    reforecastYearDashQ.isLoading ||
-                    !yearlyBudgetVsReforecast ? (
-                    <StatusPanel kind="loading" message="Loading yearly totals…" />
-                  ) : (
-                    <DashboardYearlyTwoBarChart
-                      bars={[
-                        {
-                          key: 'year-budget',
-                          label: 'Total year budget',
-                          value: yearlyBudgetVsReforecast.budget,
-                        },
-                        {
-                          key: 'year-reforecast',
-                          label: 'Reforecast projected',
-                          value: yearlyBudgetVsReforecast.reforecast,
-                        },
-                      ]}
-                      caption={`Yearly bucket ${thisMonth.year}`}
-                    />
-                  )}
-                </Card.Section>
-              </Card>
-            </section>
-          )}
-
-          <section className="col-span-1 md:col-span-2 xl:col-span-3">
-            <div className="mb-2 flex flex-wrap items-end justify-between gap-2">
-              <div>
-                <div className="text-label uppercase text-gray-500">
-                  Assumptions snapshot
-                </div>
-                <div className="text-caption text-gray-500">
-                  FY {thisMonth.year} — same waterfalls as Budget Assumptions
-                </div>
+                  <Card.Section>
+                    {monthlyActuals6Q.isLoading ? (
+                      <StatusPanel kind="loading" message="Loading trend…" />
+                    ) : (
+                      <MonthlyTrendBars items={spendTrend6} />
+                    )}
+                  </Card.Section>
+                </Card>
               </div>
-              <Link
-                to={`/assumptions/${thisMonth.year}`}
-                className="text-xs font-medium text-navy-700 underline-offset-2 hover:text-navy-900 hover:underline"
-              >
-                Edit assumptions →
-              </Link>
-            </div>
+            </section>
+          )}
+
+          {/* ── §5 Cashflow & Bills ───────────────────────────────── */}
+          {dashQ.data && (
+            <section>
+              <SectionTitle
+                kicker="Cashflow"
+                title="Budget by group"
+                subtitle={`Year to date · Jan–${formatPeriod(thisMonth, 'short')}`}
+              />
+              <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                <Card padded={false}>
+                  <Card.Header
+                    title="By group · year to date"
+                    subtitle={`Jan–${formatPeriod(thisMonth, 'short')} ${thisMonth.year}`}
+                  />
+                  <Card.Section>
+                    <VerticalGroupedBars items={ytdGroups3} />
+                  </Card.Section>
+                </Card>
+                <Card padded={false}>
+                  <Card.Header
+                    title="Bills · Quick links"
+                    subtitle={`${billsQ.data?.filter((b) => b.is_active).length ?? 0} recurring · sorted by due day`}
+                    action={
+                      <Link
+                        to="/bills"
+                        className="text-xs font-medium text-navy-700 hover:text-navy-900"
+                      >
+                        Manage →
+                      </Link>
+                    }
+                  />
+                  {billsQ.isLoading ? (
+                    <Card.Section>
+                      <StatusPanel kind="loading" message="Loading bills…" />
+                    </Card.Section>
+                  ) : (
+                    <BillsQuickLinks bills={billsQ.data ?? []} />
+                  )}
+                </Card>
+              </div>
+            </section>
+          )}
+
+          {/* ── §6 Yearly bucket ──────────────────────────────────── */}
+          {dashQ.data && yearlyExpenseItemsBarData.length > 0 && (
+            <section>
+              <SectionTitle
+                kicker="Yearly"
+                title="Yearly bucket"
+                subtitle="Insurance, property tax, subs, charity"
+              />
+              <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                <Card padded={false}>
+                  <Card.Header
+                    title="By category"
+                    subtitle={`Actual YTD through ${formatPeriod(thisMonth, 'short')} vs full-year budget`}
+                  />
+                  <Card.Section>
+                    <VerticalGroupedBars items={yearlyExpenseItemsBarData} />
+                  </Card.Section>
+                </Card>
+                <Card padded={false}>
+                  <Card.Header
+                    title="Budget vs reforecast"
+                    subtitle={`Full ${thisMonth.year} · uses latest transaction month for reforecast blend`}
+                  />
+                  <Card.Section>
+                    {yearlyBudgetCompareError ? (
+                      <StatusPanel
+                        kind="error"
+                        message="Couldn't load yearly totals"
+                        detail={yearlyBudgetCompareError instanceof Error ? yearlyBudgetCompareError.message : undefined}
+                      />
+                    ) : yearlyFYActualsQ.isLoading || reforecastYearDashQ.isLoading || !yearlyBudgetVsReforecast ? (
+                      <StatusPanel kind="loading" message="Loading yearly totals…" />
+                    ) : (
+                      <MonthlyTrendBars
+                        items={[
+                          { key: 'year-budget', label: 'Year budget', value: yearlyBudgetVsReforecast.budget },
+                          {
+                            key: 'year-reforecast',
+                            label: 'Reforecast',
+                            value: yearlyBudgetVsReforecast.reforecast,
+                            current: true,
+                          },
+                        ]}
+                      />
+                    )}
+                  </Card.Section>
+                </Card>
+              </div>
+            </section>
+          )}
+
+          {/* ── §7 Balance sheet allocation ────────────────────────── */}
+          {allocDonutSlices.length > 0 && (
+            <section>
+              <SectionTitle
+                kicker="Position"
+                title="Balance sheet allocation"
+                subtitle={`Effective balances as of ${formatPeriod(thisMonth, 'short')}`}
+                action={
+                  <Link
+                    to="/balance-sheet/allocation"
+                    className="text-xs font-medium text-navy-700 underline-offset-2 hover:text-navy-900 hover:underline"
+                  >
+                    BS Allocation →
+                  </Link>
+                }
+              />
+              <Card padded={false}>
+                <div className="grid grid-cols-1 lg:grid-cols-5">
+                  {/* donut */}
+                  <div className="flex items-center justify-center bg-gray-50 px-6 py-8 lg:col-span-2">
+                    {hideIncomeAssets ? (
+                      <div className="flex h-[220px] w-[220px] items-center justify-center text-sm text-gray-400">
+                        Hidden
+                      </div>
+                    ) : (
+                      <DonutChart
+                        items={allocDonutSlices}
+                        size={220}
+                        centerLabel="Total"
+                        centerValue={compactUsd(allocTotal)}
+                      />
+                    )}
+                  </div>
+                  {/* legend table */}
+                  <div className="px-6 py-5 lg:col-span-3">
+                    <div className="space-y-3">
+                      {allocDonutSlices
+                        .sort((a, b) => b.value - a.value)
+                        .map((s) => {
+                          const pct = allocTotal > 0 ? (s.value / allocTotal) * 100 : 0;
+                          return (
+                            <div key={s.key}>
+                              <div className="flex items-center gap-2">
+                                <span
+                                  className="inline-block h-3 w-3 rounded-sm"
+                                  style={{ backgroundColor: s.color }}
+                                />
+                                <span className="flex-1 text-sm font-medium text-navy-900">
+                                  {s.label}
+                                </span>
+                                <span className="text-sm tabular-nums text-gray-600">
+                                  {$(s.value, true)}
+                                </span>
+                                <span className="w-10 text-right text-sm tabular-nums text-gray-500">
+                                  {hideIncomeAssets
+                                    ? PRIVACY_TEXT_PLACEHOLDER
+                                    : fmtPct(pct, { decimals: 1 })}
+                                </span>
+                              </div>
+                              <div className="mt-1 ml-5 h-1.5 w-full overflow-hidden rounded-full bg-navy-100">
+                                <div
+                                  className="h-full rounded-full"
+                                  style={{
+                                    width: `${hideIncomeAssets ? 0 : pct}%`,
+                                    backgroundColor: s.color,
+                                  }}
+                                />
+                              </div>
+                            </div>
+                          );
+                        })}
+                    </div>
+                  </div>
+                </div>
+              </Card>
+            </section>
+          )}
+
+          {/* ── §8 Assumptions snapshot ────────────────────────────── */}
+          <section>
+            <SectionTitle
+              kicker="Plan"
+              title="Assumptions snapshot"
+              subtitle={`FY ${thisMonth.year}`}
+              action={
+                <Link
+                  to={`/assumptions/${thisMonth.year}`}
+                  className="text-xs font-medium text-navy-700 underline-offset-2 hover:text-navy-900 hover:underline"
+                >
+                  Edit assumptions →
+                </Link>
+              }
+            />
             {assumptionsWf.error ? (
               <StatusPanel
                 kind="error"
-                message="Couldn’t load assumptions waterfalls"
-                detail={
-                  assumptionsWf.error instanceof Error
-                    ? assumptionsWf.error.message
-                    : undefined
-                }
+                message="Couldn't load assumptions waterfalls"
+                detail={assumptionsWf.error instanceof Error ? assumptionsWf.error.message : undefined}
               />
             ) : assumptionsWf.loading ? (
               <StatusPanel kind="loading" message="Loading assumptions charts…" />
             ) : assumptionsWf.projWaterfall && assumptionsWf.actualWaterfall ? (
               <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
                 <Card>
-                  <WaterfallChart
-                    waterfall={assumptionsWf.projWaterfall}
-                    caption="Projection"
-                  />
+                  <WaterfallChart waterfall={assumptionsWf.projWaterfall} caption="Projection" />
                 </Card>
                 <Card>
-                  <WaterfallChart
-                    waterfall={assumptionsWf.actualWaterfall}
-                    caption="Actual"
-                  />
+                  <WaterfallChart waterfall={assumptionsWf.actualWaterfall} caption="Actual" />
                 </Card>
               </div>
             ) : null}
           </section>
 
-          <ActualSavingsRateKpi
-            year={thisMonth.year}
-            pct={assumptionsWf.actualSavingsRatePct}
-            loading={assumptionsWf.loading}
-            error={assumptionsWf.error}
-          />
-
-          {nw && (
-            <NetWorthCard nw={nw} thisMonth={thisMonth} />
-          )}
-
-          <GoalsCard
-            goals={settingsQ.data?.goals ?? []}
-            onSave={async (goals) => {
-              if (!household) return;
-              await saveHouseholdSettings({
-                household_id: household.id,
-                settings: { goals },
-              });
-              qc.invalidateQueries({ queryKey: ['hh-settings', household.id] });
-            }}
-          />
-        </div>
+          {/* ── §9 Plans — Trips + Goals ──────────────────────────── */}
+          <section>
+            <SectionTitle
+              kicker="Plans"
+              title="What's ahead"
+            />
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+              <Card padded={false}>
+                <Card.Header
+                  title="Upcoming trips"
+                  action={
+                    <Link
+                      to="/trips"
+                      className="rounded-full bg-gold-500 px-3 py-1 text-[11px] font-bold text-white hover:bg-gold-600"
+                    >
+                      + Add trip
+                    </Link>
+                  }
+                />
+                {tripsQ.isLoading ? (
+                  <Card.Section>
+                    <StatusPanel kind="loading" message="Loading trips…" />
+                  </Card.Section>
+                ) : (
+                  <TripsQuickLinks
+                    trips={(tripsQ.data ?? []).map((t) => ({
+                      id: t.id,
+                      name: t.name,
+                      start_date: t.start_date,
+                      end_date: t.end_date,
+                    }))}
+                    todayIso={todayIso}
+                  />
+                )}
+              </Card>
+              <GoalsCard
+                goals={settingsQ.data?.goals ?? []}
+                onSave={async (goals) => {
+                  if (!household) return;
+                  await saveHouseholdSettings({
+                    household_id: household.id,
+                    settings: { goals },
+                  });
+                  qc.invalidateQueries({ queryKey: ['hh-settings', household.id] });
+                }}
+              />
+            </div>
+          </section>
+        </>
       )}
     </div>
   );
 }
 
-// ----------------------------------------------------------------------------
-// Cards
-// ----------------------------------------------------------------------------
+// ════════════════════════════════════════════════════════════════════════
+// Hero cards
+// ════════════════════════════════════════════════════════════════════════
 
-function ActualSavingsRateKpi({
-  year,
+function HeroThisMonth({ actual, budget, period }: { actual: number; budget: number; period: Period }) {
+  const variance = actual - budget;
+  const pct = budget !== 0 ? (variance / Math.abs(budget)) * 100 : null;
+  const onTrack = actual <= budget;
+  const ratio = budget > 0 ? Math.min(actual / budget, 1.5) : 0;
+
+  return (
+    <Card className="border-gold-300 bg-gold-100/30 lg:col-span-2">
+      <div className="flex items-baseline justify-between">
+        <div>
+          <div className="text-label uppercase text-gray-500">This month</div>
+          <div className="mt-0.5 text-caption text-gray-500">
+            {formatPeriod(period, 'short')} · Spend vs budget
+          </div>
+        </div>
+        <Badge tone={onTrack ? 'pos' : 'neg'} dot>
+          {onTrack ? 'On track' : 'Over'}
+        </Badge>
+      </div>
+      <div className="mt-3 flex items-baseline gap-2">
+        <span className="kpi-display text-[36px] leading-none text-navy-900">
+          {fmtUsd(actual)}
+        </span>
+        <span className="text-sm text-gray-500">/ {fmtUsd(budget)}</span>
+      </div>
+      <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-navy-100">
+        <div
+          className={`h-full rounded-full ${onTrack ? 'bg-pos' : 'bg-neg'}`}
+          style={{ width: `${Math.max(2, ratio * 100)}%` }}
+        />
+      </div>
+      <div className={`mt-1.5 text-xs font-semibold tabular-nums ${varianceClass(variance)}`}>
+        {variance >= 0 ? '+' : '−'}
+        {fmtUsd(Math.abs(variance))}
+        {pct != null && <> ({fmtPct(pct)})</>}
+      </div>
+    </Card>
+  );
+}
+
+function SavingsRateCard({
   pct,
+  year,
   loading,
   error,
 }: {
-  year: number;
   pct: number | null;
+  year: number;
   loading: boolean;
   error: unknown;
 }) {
@@ -540,21 +846,11 @@ function ActualSavingsRateKpi({
 
   return (
     <Card>
-      <div className="flex items-baseline justify-between gap-2">
-        <div>
-          <div className="text-label uppercase text-gray-500">Actual savings rate</div>
-          <div className="mt-0.5 text-caption text-gray-500">
-            Actual savings ÷ actual income (Assumptions · FY {year})
-          </div>
-        </div>
-        <Link
-          to={`/assumptions/${year}`}
-          className="shrink-0 text-xs font-medium text-navy-700 underline-offset-2 hover:text-navy-900 hover:underline"
-        >
-          Details →
-        </Link>
+      <div className="text-label uppercase text-gray-500">Savings rate</div>
+      <div className="mt-0.5 text-caption text-gray-500">
+        Actual ÷ income · YTD {year}
       </div>
-      <div className="mt-4 text-3xl font-bold tabular-nums text-navy-900">
+      <div className="mt-3 kpi-display text-[32px] leading-none text-navy-900">
         {error ? (
           <span className="text-base font-normal text-gray-400">—</span>
         ) : loading ? (
@@ -567,189 +863,49 @@ function ActualSavingsRateKpi({
           '—'
         )}
       </div>
+      <div className="mt-2">
+        <Link
+          to={`/assumptions/${year}`}
+          className="text-xs font-medium text-navy-700 hover:text-navy-900"
+        >
+          Details →
+        </Link>
+      </div>
     </Card>
   );
 }
 
-function ProgressCard(props: {
-  title: string;
-  subtitle: string;
-  actual: number;
-  budget: number;
-  actualLabel: string;
-  budgetLabel: string;
-  /** True when "actual > budget" is GOOD (income/savings). Default false. */
-  higherIsBetter?: boolean;
-  /** Mask dollar amounts when privacy toggle is on (income/savings cards). */
-  privacySensitive?: boolean;
-}) {
-  const {
-    title,
-    subtitle,
-    actual,
-    budget,
-    actualLabel,
-    budgetLabel,
-    higherIsBetter,
-    privacySensitive,
-  } = props;
-  const { hideIncomeAssets } = usePrivacyMode();
-  const mask = !!(privacySensitive && hideIncomeAssets);
-  const $ = (n: number) => maskUsd(hideIncomeAssets, n, !!privacySensitive);
-
-  const variance = actual - budget;
-  const pct = budget !== 0 ? (variance / Math.abs(budget)) * 100 : null;
-  const flipForColor = higherIsBetter ? -variance : variance;
+function YtdCard({ actual, budget, year }: { actual: number; budget: number; year: number }) {
+  const onTrack = actual <= budget;
   const ratio = budget > 0 ? Math.min(actual / budget, 1.5) : 0;
-
-  const onTrack = higherIsBetter ? actual >= budget : actual <= budget;
-  const barColor = onTrack ? 'bg-pos' : 'bg-neg';
 
   return (
     <Card>
       <div className="flex items-baseline justify-between">
-        <div>
-          <div className="text-label uppercase text-gray-500">{title}</div>
-          <div className="mt-0.5 text-caption text-gray-500">{subtitle}</div>
-        </div>
-        <Badge tone={mask ? 'neutral' : onTrack ? 'pos' : 'neg'} dot>
-          {mask ? '—' : onTrack ? 'On track' : 'Over'}
+        <div className="text-label uppercase text-gray-500">YTD</div>
+        <Badge tone={onTrack ? 'pos' : 'neg'} dot>
+          {onTrack ? 'On track' : 'Over'}
         </Badge>
       </div>
-      <div className="mt-3 flex items-baseline justify-between gap-2">
-        <div>
-          <div className="text-[10px] uppercase tracking-wider text-gray-400">
-            {actualLabel}
-          </div>
-          <div className="text-2xl font-bold tabular-nums text-navy-900">
-            {$(actual)}
-          </div>
-        </div>
-        <div className="text-right">
-          <div className="text-[10px] uppercase tracking-wider text-gray-400">
-            {budgetLabel}
-          </div>
-          <div className="text-base tabular-nums text-gray-600">{$(budget)}</div>
-        </div>
+      <div className="mt-3 kpi-display text-[28px] leading-none text-navy-900">
+        {fmtUsd(actual)}
       </div>
-      {/* Tiny progress bar; capped at 150% so over-runs are visually distinct. */}
+      <div className="mt-1 text-caption text-gray-500">
+        of {fmtUsd(budget)} · {year}
+      </div>
       <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-navy-100">
         <div
-          className={`h-full ${mask ? 'bg-gray-300' : barColor}`}
-          style={{ width: `${mask ? 0 : Math.max(2, ratio * 100)}%` }}
+          className={`h-full rounded-full ${onTrack ? 'bg-pos' : 'bg-neg'}`}
+          style={{ width: `${Math.max(2, ratio * 100)}%` }}
         />
       </div>
-      <div className={`mt-1.5 text-xs tabular-nums ${mask ? 'text-gray-400' : varianceClass(flipForColor)}`}>
-        {mask ? (
-          PRIVACY_TEXT_PLACEHOLDER
-        ) : (
-          <>
-            {variance >= 0 ? '+' : '−'}
-            {fmtUsd(Math.abs(variance))}
-            {pct != null && <> ({fmtPct(higherIsBetter ? -pct : pct)})</>}
-          </>
-        )}
-      </div>
     </Card>
   );
 }
 
-interface NetWorthSummary {
-  cur: { assets: number; liab: number; net: number };
-  prior: { assets: number; liab: number; net: number };
-  soy: { assets: number; liab: number; net: number };
-  series: ReturnType<typeof netWorthSeries>;
-}
-
-function NetWorthCard({ nw, thisMonth }: { nw: NetWorthSummary; thisMonth: Period }) {
-  const { hideIncomeAssets } = usePrivacyMode();
-  const $ = (n: number) => maskUsd(hideIncomeAssets, n, true);
-
-  const dMonth = nw.cur.net - nw.prior.net;
-  const dYear = nw.cur.net - nw.soy.net;
-  const dMonthPct =
-    nw.prior.net !== 0 ? (dMonth / Math.abs(nw.prior.net)) * 100 : null;
-  const dYearPct = nw.soy.net !== 0 ? (dYear / Math.abs(nw.soy.net)) * 100 : null;
-
-  const firstRealIdx = nw.series.findIndex(
-    (s) => s.assets !== 0 || s.liabilities !== 0,
-  );
-  const chartSeries = firstRealIdx >= 0 ? nw.series.slice(firstRealIdx) : nw.series;
-  const chartPoints = chartSeries.map((s) => ({
-    label: formatPeriod(s.period, 'short'),
-    value: s.net,
-  }));
-
-  return (
-    <Card className="md:col-span-2">
-      <div className="flex items-baseline justify-between">
-        <div>
-          <div className="text-label uppercase text-gray-500">Net Worth</div>
-          <div className="mt-0.5 text-caption text-gray-500">
-            as of {formatPeriod(thisMonth, 'short')} · 24-month trend
-          </div>
-        </div>
-        <Link
-          to="/balance-sheet"
-          className="text-xs font-medium text-navy-700 underline-offset-2 hover:text-navy-900 hover:underline"
-        >
-          Edit balance sheet →
-        </Link>
-      </div>
-      <div className="mt-3 flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <div className="text-3xl font-bold tabular-nums text-navy-900">
-            {$(nw.cur.net)}
-          </div>
-          <div className="mt-1 grid grid-cols-2 gap-x-6 gap-y-1 text-xs text-gray-600">
-            <span>
-              <span className="text-gray-400">M:&nbsp;</span>
-              <span className={hideIncomeAssets ? 'text-gray-400' : varianceClass(-dMonth)}>
-                {hideIncomeAssets ? (
-                  PRIVACY_TEXT_PLACEHOLDER
-                ) : (
-                  <>
-                    {dMonth >= 0 ? '+' : '−'}
-                    {fmtUsd(Math.abs(dMonth))}
-                    {dMonthPct != null && <> ({fmtPct(dMonthPct)})</>}
-                  </>
-                )}
-              </span>
-            </span>
-            <span>
-              <span className="text-gray-400">YTD:&nbsp;</span>
-              <span className={hideIncomeAssets ? 'text-gray-400' : varianceClass(-dYear)}>
-                {hideIncomeAssets ? (
-                  PRIVACY_TEXT_PLACEHOLDER
-                ) : (
-                  <>
-                    {dYear >= 0 ? '+' : '−'}
-                    {fmtUsd(Math.abs(dYear))}
-                    {dYearPct != null && <> ({fmtPct(dYearPct)})</>}
-                  </>
-                )}
-              </span>
-            </span>
-            <span className="col-span-2 text-gray-400">
-              Assets {$(nw.cur.assets)} · Liabilities {$(nw.cur.liab)}
-            </span>
-          </div>
-        </div>
-        {hideIncomeAssets ? (
-          <div
-            className="flex h-20 w-full max-w-[400px] items-center justify-center rounded-md border border-dashed border-navy-200 bg-navy-50 text-caption text-gray-400 md:h-[80px]"
-            aria-hidden
-          >
-            Trend hidden
-          </div>
-        ) : (
-          <Sparkline points={chartPoints} width={400} height={80} />
-        )}
-      </div>
-    </Card>
-  );
-}
-
+// ════════════════════════════════════════════════════════════════════════
+// Goals card (unchanged)
+// ════════════════════════════════════════════════════════════════════════
 
 function GoalsCard({
   goals,
