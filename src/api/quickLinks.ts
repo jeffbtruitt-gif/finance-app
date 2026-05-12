@@ -41,7 +41,7 @@ export async function updateQuickLink(
   id: string,
   patch: Partial<Pick<QuickLink, 'name' | 'url'>>,
 ): Promise<void> {
-  const cleaned: Record<string, unknown> = {};
+  const cleaned: Partial<Pick<QuickLink, 'name' | 'url'>> = {};
   if (patch.name !== undefined) cleaned.name = patch.name.trim();
   if (patch.url !== undefined) {
     let url = patch.url.trim();

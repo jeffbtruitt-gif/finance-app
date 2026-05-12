@@ -615,6 +615,26 @@ export type Database = {
         Update: Partial<Database['public']['Tables']['tf_import_batches']['Row']>;
         Relationships: EmptyRelationships;
       };
+      tf_quick_links: {
+        Row: {
+          id: string;
+          household_id: string;
+          name: string;
+          url: string;
+          sort_order: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          household_id: string;
+          name: string;
+          url: string;
+          sort_order?: number;
+          created_at?: string;
+        };
+        Update: Partial<Database['public']['Tables']['tf_quick_links']['Row']>;
+        Relationships: EmptyRelationships;
+      };
     };
     Views: {
       tf_v_monthly_category_actuals: {
