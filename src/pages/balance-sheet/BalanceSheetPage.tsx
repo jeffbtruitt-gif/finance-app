@@ -161,42 +161,65 @@ function ItemsPanel(props: ItemsPanelProps) {
   const visible = items.filter((i) => showInactive || i.is_active);
   const assets = visible.filter((i) => i.type === 'asset');
   const liabilities = visible.filter((i) => i.type === 'liability');
+  const offBs = visible.filter((i) => i.type === 'off_balance_sheet');
 
   return (
-    <Card padded={false}>
-      <div className="flex items-center justify-between border-b border-navy-100 px-4 py-2.5">
-        <h2 className="text-h3 text-navy-800">Items</h2>
-        <label className="flex items-center gap-1.5 text-caption text-gray-500">
-          <input
-            type="checkbox"
-            checked={showInactive}
-            onChange={(e) => setShowInactive(e.target.checked)}
-          />
-          Show archived
-        </label>
-      </div>
+    <div className="space-y-4">
+      <Card padded={false}>
+        <div className="flex items-center justify-between border-b border-navy-100 px-4 py-2.5">
+          <h2 className="text-h3 text-navy-800">Items</h2>
+          <label className="flex items-center gap-1.5 text-caption text-gray-500">
+            <input
+              type="checkbox"
+              checked={showInactive}
+              onChange={(e) => setShowInactive(e.target.checked)}
+            />
+            Show archived
+          </label>
+        </div>
 
-      <ItemSection
-        title="Assets"
-        items={assets}
-        values={values}
-        effective={effective}
-        effectivePrior={effectivePrior}
-        seriesPeriod={series24Period}
-        selectedItemId={selectedItemId}
-        onSelect={onSelect}
-      />
-      <ItemSection
-        title="Liabilities"
-        items={liabilities}
-        values={values}
-        effective={effective}
-        effectivePrior={effectivePrior}
-        seriesPeriod={series24Period}
-        selectedItemId={selectedItemId}
-        onSelect={onSelect}
-      />
-    </Card>
+        <ItemSection
+          title="Assets"
+          items={assets}
+          values={values}
+          effective={effective}
+          effectivePrior={effectivePrior}
+          seriesPeriod={series24Period}
+          selectedItemId={selectedItemId}
+          onSelect={onSelect}
+        />
+        <ItemSection
+          title="Liabilities"
+          items={liabilities}
+          values={values}
+          effective={effective}
+          effectivePrior={effectivePrior}
+          seriesPeriod={series24Period}
+          selectedItemId={selectedItemId}
+          onSelect={onSelect}
+        />
+      </Card>
+
+      {offBs.length > 0 && (
+        <Card padded={false}>
+          <div className="border-b border-navy-100 px-4 py-2.5">
+            <h2 className="text-h3 text-navy-800">Off Balance Sheet</h2>
+            <p className="text-xs text-gray-500">Tracked for historical trends — not included in net worth</p>
+          </div>
+          <ItemSection
+            title="Off Balance Sheet"
+            items={offBs}
+            values={values}
+            effective={effective}
+            effectivePrior={effectivePrior}
+            seriesPeriod={series24Period}
+            selectedItemId={selectedItemId}
+            onSelect={onSelect}
+            hideTotal
+          />
+        </Card>
+      )}
+    </div>
   );
 }
 
@@ -209,6 +232,7 @@ interface ItemSectionProps {
   seriesPeriod: Period;
   selectedItemId: string | null;
   onSelect: (id: string) => void;
+  hideTotal?: boolean;
 }
 
 function ItemSection({
@@ -220,6 +244,7 @@ function ItemSection({
   seriesPeriod,
   selectedItemId,
   onSelect,
+  hideTotal,
 }: ItemSectionProps) {
   const { hideIncomeAssets } = usePrivacyMode();
   const $ = (n: number) => maskUsd(hideIncomeAssets, n, true);
@@ -243,6 +268,7 @@ function ItemSection({
             <th className={`${RT.th} ${RT.thRight}`}>Value</th>
             <th className={`${RT.th} ${RT.thRight}`}>Δ vs prior</th>
             <th className={`${RT.th} ${RT.thLeft}`}>24-mo trend</th>
+            <th className={`${RT.th} ${RT.thLeft}`}>Source</th>
           </tr>
         </thead>
         <tbody>
@@ -250,14 +276,15 @@ function ItemSection({
             const v = effective.get(it.id);
             const pv = effectivePrior.get(it.id);
             const dv = v != null && pv != null ? v - pv : null;
-            const sparkData = netWorthSeries({
-              items: [it],
+            const itemSeries = netWorthSeries({
+              items: [{ ...it, type: it.type === 'off_balance_sheet' ? 'asset' : it.type }],
               values: values.filter((x) => x.item_id === it.id),
               endMonth: seriesPeriod,
               count: 24,
-            }).map((s) => ({
+            });
+            const sparkData = itemSeries.map((s) => ({
               label: '',
-              value: it.type === 'asset' ? s.assets : s.liabilities,
+              value: it.type === 'liability' ? s.liabilities : s.assets,
             }));
             const isSel = selectedItemId === it.id;
             return (
@@ -292,19 +319,42 @@ function ItemSection({
                       height={28}
                       showEndpointLabels={false}
                       area={false}
-                      color={it.type === 'asset' ? '#1f8a70' : '#b14b4b'}
+                      color={it.type === 'liability' ? '#b14b4b' : it.type === 'off_balance_sheet' ? '#6366f1' : '#1f8a70'}
                     />
+                  )}
+                </td>
+                <td className="px-3 py-1.5" onClick={(e) => e.stopPropagation()}>
+                  {it.value_source_url ? (
+                    <a
+                      href={
+                        it.value_source_url.startsWith('http://') || it.value_source_url.startsWith('https://')
+                          ? it.value_source_url
+                          : `https://${it.value_source_url}`
+                      }
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 rounded-md bg-navy-600 px-2.5 py-1 text-xs font-bold text-white shadow-sm transition-colors hover:bg-navy-700 active:bg-navy-800"
+                    >
+                      Open
+                      <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
+                      </svg>
+                    </a>
+                  ) : (
+                    <span className="text-gray-300">—</span>
                   )}
                 </td>
               </tr>
             );
           })}
-          <tr className={RT.subtotalRow}>
-            <td className="px-3 py-1.5">Total {title}</td>
-            <td />
-            <td className="px-3 py-1.5 text-right tabular-nums">{$(total)}</td>
-            <td colSpan={2} />
-          </tr>
+          {!hideTotal && (
+            <tr className={RT.subtotalRow}>
+              <td className="px-3 py-1.5">Total {title}</td>
+              <td />
+              <td className="px-3 py-1.5 text-right tabular-nums">{$(total)}</td>
+              <td colSpan={3} />
+            </tr>
+          )}
         </tbody>
       </table>
     </div>
@@ -353,7 +403,13 @@ function ValueEditorPanel(props: ValueEditorProps) {
     <Card padded={false}>
       <div className="border-b border-navy-100 px-4 py-2.5">
         <div className="text-label uppercase tracking-wider text-gray-500">
-          {item.type === 'asset' ? <Badge tone="pos">Asset</Badge> : <Badge tone="neg">Liability</Badge>}
+          {item.type === 'asset' ? (
+            <Badge tone="pos">Asset</Badge>
+          ) : item.type === 'liability' ? (
+            <Badge tone="neg">Liability</Badge>
+          ) : (
+            <Badge tone="neutral">Off Balance Sheet</Badge>
+          )}
         </div>
         <h2 className="mt-1 text-h2 text-navy-900">{item.name}</h2>
         <div className="mt-1 text-caption text-gray-500">

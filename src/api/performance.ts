@@ -226,3 +226,46 @@ export async function deleteRegressionRun(
     .eq('run_date', run_date);
   if (error) throw error;
 }
+
+// ---------------------------------------------------------------------------
+// Rebalances
+// ---------------------------------------------------------------------------
+
+export interface Rebalance {
+  id: string;
+  household_id: string;
+  account_id: string;
+  month: string; // YYYY-MM-01
+  notes: string | null;
+  created_at: string;
+}
+
+export async function fetchRebalances(household_id: string): Promise<Rebalance[]> {
+  const { data, error } = await supabase
+    .from('tf_rebalances')
+    .select('*')
+    .eq('household_id', household_id)
+    .order('month', { ascending: false });
+  if (error) throw error;
+  return data ?? [];
+}
+
+export async function addRebalance(
+  household_id: string,
+  account_id: string,
+  month: string,
+  notes?: string | null,
+): Promise<void> {
+  const { error } = await supabase
+    .from('tf_rebalances')
+    .insert({ household_id, account_id, month, notes: notes ?? null });
+  if (error) throw error;
+}
+
+export async function removeRebalance(id: string): Promise<void> {
+  const { error } = await supabase
+    .from('tf_rebalances')
+    .delete()
+    .eq('id', id);
+  if (error) throw error;
+}

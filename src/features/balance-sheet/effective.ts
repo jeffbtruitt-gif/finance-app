@@ -86,10 +86,12 @@ export function effectiveValuesAt(
   return out;
 }
 
+export type BsItemType = 'asset' | 'liability' | 'off_balance_sheet';
+
 export interface BsItem {
   id: string;
   name: string;
-  type: 'asset' | 'liability';
+  type: BsItemType;
   sort_order: number;
   equity_group: string | null;
   is_active: boolean;
@@ -133,6 +135,7 @@ export function netWorthSeries(args: {
     let liabilities = 0;
     for (const it of items) {
       if (!it.is_active) continue;
+      if (it.type === 'off_balance_sheet') continue;
       const v = eff.get(it.id);
       if (v == null) continue;
       if (it.type === 'asset') assets += v;

@@ -268,7 +268,7 @@ export type Database = {
           id: string;
           household_id: string;
           name: string;
-          type: 'asset' | 'liability';
+          type: 'asset' | 'liability' | 'off_balance_sheet';
           sort_order: number;
           is_active: boolean;
           equity_group: string | null;
@@ -279,7 +279,7 @@ export type Database = {
           id?: string;
           household_id: string;
           name: string;
-          type: 'asset' | 'liability';
+          type: 'asset' | 'liability' | 'off_balance_sheet';
           sort_order?: number;
           is_active?: boolean;
           equity_group?: string | null;
@@ -574,6 +574,7 @@ export type Database = {
           // Phase 7 additions (migration 10):
           annual_cost: number | null;
           cost_inflation: number | null;
+          bs_item_id: string | null;
         };
         Insert: {
           id?: string;
@@ -587,6 +588,7 @@ export type Database = {
           duration_years?: number;
           annual_cost?: number | null;
           cost_inflation?: number | null;
+          bs_item_id?: string | null;
         };
         Update: Partial<Database['public']['Tables']['tf_college_kids']['Row']>;
         Relationships: EmptyRelationships;
@@ -633,6 +635,26 @@ export type Database = {
           created_at?: string;
         };
         Update: Partial<Database['public']['Tables']['tf_quick_links']['Row']>;
+        Relationships: EmptyRelationships;
+      };
+      tf_rebalances: {
+        Row: {
+          id: string;
+          household_id: string;
+          account_id: string;
+          month: string; // ISO date YYYY-MM-01
+          notes: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          household_id: string;
+          account_id: string;
+          month: string;
+          notes?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<Database['public']['Tables']['tf_rebalances']['Row']>;
         Relationships: EmptyRelationships;
       };
     };

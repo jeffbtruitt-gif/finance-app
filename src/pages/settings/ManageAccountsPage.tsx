@@ -15,7 +15,7 @@ import {
   updateBalanceSheetItem,
   deleteBalanceSheetItem,
 } from '@/api/balanceSheet';
-import type { BsItem } from '@/features/balance-sheet/effective';
+import type { BsItem, BsItemType } from '@/features/balance-sheet/effective';
 import { StatusPanel } from '@/components/StatusPanel';
 import { Button, Card, RT } from '@/components/ds';
 
@@ -60,8 +60,10 @@ export function ManageAccountsPage() {
     return <StatusPanel kind="loading" message="Loading accounts…" />;
   }
 
-  const assets = (showArchived ? items : activeItems).filter((i) => i.type === 'asset');
-  const liabilities = (showArchived ? items : activeItems).filter((i) => i.type === 'liability');
+  const visible = showArchived ? items : activeItems;
+  const assets = visible.filter((i) => i.type === 'asset');
+  const liabilities = visible.filter((i) => i.type === 'liability');
+  const offBs = visible.filter((i) => i.type === 'off_balance_sheet');
 
   return (
     <div className="space-y-6">
@@ -98,8 +100,14 @@ export function ManageAccountsPage() {
         items={liabilities}
         onEdit={(item) => setModalItem(item)}
       />
+      <AccountSection
+        title="Off Balance Sheet"
+        items={offBs}
+        onEdit={(item) => setModalItem(item)}
+        subtitle="Tracked for historical trends but not included in net worth"
+      />
 
-      {assets.length === 0 && liabilities.length === 0 && (
+      {assets.length === 0 && liabilities.length === 0 && offBs.length === 0 && (
         <Card>
           <p className="py-4 text-center text-sm text-gray-400">
             No accounts yet. Click <strong>+ Add Account</strong> to get started.
@@ -175,17 +183,20 @@ function AccountSection({
   title,
   items,
   onEdit,
+  subtitle,
 }: {
   title: string;
   items: BsItem[];
   onEdit: (item: BsItem) => void;
+  subtitle?: string;
 }) {
   if (items.length === 0) return null;
 
   return (
     <Card padded={false}>
-      <div className={`${RT.groupRow} px-4 py-2 text-label uppercase tracking-wider text-navy-700`}>
-        {title}
+      <div className={`${RT.groupRow} px-4 py-2`}>
+        <div className="text-label uppercase tracking-wider text-navy-700">{title}</div>
+        {subtitle && <div className="mt-0.5 text-xs font-normal normal-case tracking-normal text-gray-500">{subtitle}</div>}
       </div>
       <table className={`${RT.table} w-full table-fixed`}>
         <colgroup>
@@ -280,7 +291,7 @@ function AccountModal({
   item: BsItem | null;
   onSave: (vals: {
     name: string;
-    type: 'asset' | 'liability';
+    type: BsItemType;
     equity_group: string | null;
     value_source_url: string | null;
   }) => Promise<void>;
@@ -291,7 +302,7 @@ function AccountModal({
 }) {
   const isNew = item === null;
   const [name, setName] = useState(item?.name ?? '');
-  const [type, setType] = useState<'asset' | 'liability'>(item?.type ?? 'asset');
+  const [type, setType] = useState<BsItemType>(item?.type ?? 'asset');
   const [group, setGroup] = useState(item?.equity_group ?? '');
   const [url, setUrl] = useState(item?.value_source_url ?? '');
   const [busy, setBusy] = useState(false);
@@ -359,9 +370,10 @@ function AccountModal({
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="mb-1 block text-xs font-medium text-gray-600">Type</label>
-              <select value={type} onChange={(e) => setType(e.target.value as 'asset' | 'liability')} className={selectCls}>
+              <select value={type} onChange={(e) => setType(e.target.value as BsItemType)} className={selectCls}>
                 <option value="asset">Asset</option>
                 <option value="liability">Liability</option>
+                <option value="off_balance_sheet">Off Balance Sheet</option>
               </select>
             </div>
             <div>

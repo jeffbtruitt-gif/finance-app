@@ -266,7 +266,7 @@ function AccountAllocationCard({
         </div>
         <div className="flex items-center gap-3">
           <span className={`text-sm tabular-nums font-semibold ${valid ? 'text-green-600' : 'text-neg'}`}>
-            {totalPct.toFixed(0)}% allocated
+            {Number.isInteger(totalPct) ? totalPct.toFixed(0) : totalPct.toFixed(1)}% allocated
           </span>
           <button
             onClick={() => { if (confirm(`Remove allocation for "${item.name}"?`)) onRemove(); }}

@@ -84,6 +84,7 @@ export function buildAccountChangeRows(args: {
   const rows: AccountChangeRow[] = [];
   for (const it of args.items) {
     if (!it.is_active) continue;
+    if (it.type === 'off_balance_sheet') continue;
     const current = curEff.get(it.id) ?? null;
     const baseline = baseEff.get(it.id) ?? null;
     const { delta, pct } = deltaAndPct(current, baseline);

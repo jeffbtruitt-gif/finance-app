@@ -306,22 +306,20 @@ export interface DetailTransaction {
 export async function fetchCategoryTransactions(args: {
   household_id: string;
   scheme_id: string;
-  category_id: string;
+  category_id?: string;
   from?: string; // ISO date; omit for "all time"
   to?: string;   // ISO date; omit for "all time"
 }): Promise<DetailTransaction[]> {
   const { household_id, scheme_id, category_id, from, to } = args;
 
-  // Two-step: get transaction_ids in this category for the scheme, then load
-  // their detail rows. Cheaper than embedding through the join + filter on
-  // the embedded category_id (PostgREST doesn't filter embeds easily).
-  const { data: catRows, error: catErr } = await supabase
+  let catQ = supabase
     .from('tf_transaction_categories')
     .select('transaction_id')
-    .eq('scheme_id', scheme_id)
-    .eq('category_id', category_id);
+    .eq('scheme_id', scheme_id);
+  if (category_id) catQ = catQ.eq('category_id', category_id);
+  const { data: catRows, error: catErr } = await catQ;
   if (catErr) throw catErr;
-  const ids = (catRows ?? []).map(r => r.transaction_id);
+  const ids = [...new Set((catRows ?? []).map(r => r.transaction_id))];
   if (ids.length === 0) return [];
 
   // Fetch transactions in chunks (Postgres `in` clause practical limit).

@@ -19,7 +19,7 @@
  * the schema. (See migration 10 docstring + api/college.ts decisions.)
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useHousehold } from '@/api/household';
 import { useDefaultPeriod } from '@/lib/useDefaultPeriod';
@@ -35,6 +35,13 @@ import {
   updateCollegeKid,
   type CollegeKid,
 } from '@/api/college';
+import { fetchBalanceSheetItems, fetchBalanceSheetValues } from '@/api/balanceSheet';
+import {
+  effectiveValuesAt,
+  periodToBsMonth,
+  type BsItem,
+  type BsValue,
+} from '@/features/balance-sheet/effective';
 import {
   buildCollegeProjection,
   type CollegeProjection,
@@ -42,6 +49,7 @@ import {
 import { LineChart } from '@/components/LineChart';
 import { StatusPanel } from '@/components/StatusPanel';
 import { usePrivacyUsdFormatters } from '@/lib/usePrivacyUsdFormatters';
+import { MONTH_NAMES_LONG } from '@/lib/period';
 import { Badge, Button, Card, Kpi, RT } from '@/components/ds';
 
 // ============================================================================
@@ -60,6 +68,21 @@ export function CollegePage() {
     enabled: !!household?.id,
     queryFn: () => fetchCollegeKids(household!.id),
   });
+
+  const bsItemsQ = useQuery({
+    queryKey: ['bs-items', household?.id],
+    enabled: !!household?.id,
+    queryFn: () => fetchBalanceSheetItems(household!.id),
+  });
+
+  const bsValuesQ = useQuery({
+    queryKey: ['bs-values', household?.id],
+    enabled: !!household?.id,
+    queryFn: () => fetchBalanceSheetValues(household!.id),
+  });
+
+  const bsItems = bsItemsQ.data ?? [];
+  const bsValues = bsValuesQ.data ?? [];
 
   const [newName, setNewName] = useState('');
   const [newBirthYear, setNewBirthYear] = useState('');
@@ -194,6 +217,9 @@ export function CollegePage() {
           projection={p}
           onPatch={(patch) => patchKid(p.kid.id, patch)}
           onRemove={() => removeKid(p.kid)}
+          bsItems={bsItems}
+          bsValues={bsValues}
+          currentYear={currentYear}
         />
       ))}
     </div>
@@ -230,10 +256,16 @@ function KidSection({
   projection,
   onPatch,
   onRemove,
+  bsItems,
+  bsValues,
+  currentYear,
 }: {
   projection: CollegeProjection;
   onPatch: (patch: Parameters<typeof updateCollegeKid>[0]['patch']) => Promise<void>;
   onRemove: () => void;
+  bsItems: BsItem[];
+  bsValues: BsValue[];
+  currentYear: number;
 }) {
   const { sensitive: privUsd } = usePrivacyUsdFormatters();
   const { kid } = projection;
@@ -241,6 +273,48 @@ function KidSection({
     x: r.year,
     y: r.endBalance,
   }));
+
+  const linkedItem = kid.bs_item_id
+    ? bsItems.find((i) => i.id === kid.bs_item_id) ?? null
+    : null;
+
+  const historicalPoints = useMemo(() => {
+    if (!kid.bs_item_id) return [];
+    const itemValues = bsValues.filter((v) => v.item_id === kid.bs_item_id);
+    if (itemValues.length === 0) return [];
+
+    const months: { x: number; y: number; label: string }[] = [];
+    const now = new Date();
+    const endYear = currentYear;
+    const endMonth = now.getMonth() + 1;
+
+    const startIso = itemValues
+      .map((v) => v.as_of_month)
+      .sort()[0];
+    const [sy, sm] = startIso.split('-').map(Number);
+
+    let year = sy;
+    let month = sm;
+    while (year < endYear || (year === endYear && month <= endMonth)) {
+      const iso = periodToBsMonth({ year, month });
+      const eff = effectiveValuesAt(bsValues.filter((v) => v.item_id === kid.bs_item_id), iso);
+      const val = eff.get(kid.bs_item_id!);
+      if (val != null) {
+        const idx = (year - sy) * 12 + (month - sm);
+        months.push({
+          x: idx,
+          y: val,
+          label: `${MONTH_NAMES_LONG[month - 1].slice(0, 3)} ${year}`,
+        });
+      }
+      month++;
+      if (month > 12) {
+        month = 1;
+        year++;
+      }
+    }
+    return months;
+  }, [kid.bs_item_id, bsValues, currentYear]);
 
   return (
     <Card padded={false}>
@@ -363,7 +437,40 @@ function KidSection({
             onPatch({ birth_year: Math.round(v ?? kid.birth_year) })
           }
         />
+        <div className="flex items-center justify-between gap-3">
+          <label className="text-sm text-gray-700">Linked account</label>
+          <select
+            value={kid.bs_item_id ?? ''}
+            onChange={(e) => onPatch({ bs_item_id: e.target.value || null })}
+            className="w-48 rounded-md border border-gray-200 bg-white px-2 py-1 text-right text-sm focus:border-navy-500 focus:outline-none focus:ring-2 focus:ring-navy-200"
+          >
+            <option value="">— none —</option>
+            {bsItems
+              .filter((i) => i.is_active)
+              .map((i) => (
+                <option key={i.id} value={i.id}>
+                  {i.name}
+                  {i.type === 'off_balance_sheet' ? ' (OBS)' : i.type === 'asset' ? '' : ' (liability)'}
+                </option>
+              ))}
+          </select>
+        </div>
       </div>
+
+      {linkedItem && historicalPoints.length > 0 && (
+        <div className="border-b border-navy-100 p-4">
+          <LineChart
+            points={historicalPoints}
+            title={`${linkedItem.name} — historical balance`}
+            subtitle="Actual recorded values from the balance sheet"
+            color="#6366f1"
+            formatX={(x) => {
+              const pt = historicalPoints.find((p) => p.x === x);
+              return pt?.label ?? String(x);
+            }}
+          />
+        </div>
+      )}
 
       <div className="border-b border-navy-100 p-4">
         <LineChart

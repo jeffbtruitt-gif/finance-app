@@ -64,7 +64,7 @@ export function SingleDetailReportPage() {
       fetchCategoryTransactions({
         household_id: household!.id,
         scheme_id: schemeQ.data!,
-        category_id: categoryId,
+        category_id: categoryId === '__all__' ? undefined : categoryId,
         from: range.from,
         to: range.to,
       }),
@@ -86,7 +86,10 @@ export function SingleDetailReportPage() {
   const totalInRange = txQ.data?.length ?? 0;
   const searchActive = descriptionSearch.trim().length > 0;
 
-  const selectedCategory = categoriesQ.data?.find((c) => c.id === categoryId) ?? null;
+  const isAllCategories = categoryId === '__all__';
+  const selectedCategory = isAllCategories
+    ? null
+    : (categoriesQ.data?.find((c) => c.id === categoryId) ?? null);
 
   const selectCls =
     'rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 focus:border-navy-500 focus:outline-none focus:ring-2 focus:ring-navy-200';
@@ -110,6 +113,7 @@ export function SingleDetailReportPage() {
               className={selectCls}
             >
               <option value="">— Select category —</option>
+              <option value="__all__">All</option>
               {categoriesQ.data?.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.group_name ? `${c.group_name} · ` : ''}
@@ -174,7 +178,9 @@ export function SingleDetailReportPage() {
         <Card padded={false}>
           <div className="flex items-baseline justify-between border-b border-navy-100 bg-navy-50/60 px-4 py-3">
             <div className="flex items-baseline gap-3">
-              {selectedCategory && <CategoryChip name={selectedCategory.name} />}
+              {isAllCategories
+                ? <CategoryChip name="All Categories" />
+                : selectedCategory && <CategoryChip name={selectedCategory.name} />}
               <span className="text-caption text-gray-500">
                 {mode === 'all'
                   ? 'All time'

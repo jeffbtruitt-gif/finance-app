@@ -12,7 +12,7 @@
  */
 
 import { supabase } from './supabase';
-import type { BsItem, BsValue } from '@/features/balance-sheet/effective';
+import type { BsItem, BsItemType, BsValue } from '@/features/balance-sheet/effective';
 
 // ----------------------------------------------------------------------------
 // Items
@@ -31,7 +31,7 @@ export async function fetchBalanceSheetItems(
   return (data ?? []).map((r) => ({
     id: r.id,
     name: r.name,
-    type: r.type as 'asset' | 'liability',
+    type: r.type as BsItemType,
     sort_order: r.sort_order,
     equity_group: r.equity_group ?? null,
     is_active: r.is_active,
@@ -42,7 +42,7 @@ export async function fetchBalanceSheetItems(
 export async function createBalanceSheetItem(args: {
   household_id: string;
   name: string;
-  type: 'asset' | 'liability';
+  type: BsItemType;
   equity_group?: string | null;
   sort_order?: number;
 }): Promise<BsItem> {
@@ -62,7 +62,7 @@ export async function createBalanceSheetItem(args: {
   return {
     id: data.id,
     name: data.name,
-    type: data.type as 'asset' | 'liability',
+    type: data.type as BsItemType,
     sort_order: data.sort_order,
     equity_group: data.equity_group ?? null,
     is_active: data.is_active,
@@ -74,7 +74,7 @@ export async function updateBalanceSheetItem(args: {
   id: string;
   patch: Partial<{
     name: string;
-    type: 'asset' | 'liability';
+    type: BsItemType;
     equity_group: string | null;
     sort_order: number;
     is_active: boolean;

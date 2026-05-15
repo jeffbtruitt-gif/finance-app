@@ -22,8 +22,12 @@ import {
   saveRegressionResults,
   fetchRegressionResults,
   deleteRegressionRun,
+  fetchRebalances,
+  addRebalance,
+  removeRebalance,
   type PerfAccount,
   type PerfRate,
+  type Rebalance,
   type RegressionRow,
   type RegressionInsert,
 } from '@/api/performance';
@@ -84,6 +88,14 @@ export function PerformancePage() {
     enabled: !!household?.id,
     queryFn: () => fetchRegressionResults(household!.id),
   });
+
+  const rebalancesQ = useQuery({
+    queryKey: ['perf-rebalances', household?.id],
+    enabled: !!household?.id,
+    queryFn: () => fetchRebalances(household!.id),
+  });
+  const rebalances = rebalancesQ.data ?? [];
+  const invalidateRebalances = () => qc.invalidateQueries({ queryKey: ['perf-rebalances', household?.id] });
 
   // Detail tab: derive monthly rates for the selected regression
   const detailRef = detailRows?.[0] ?? null;
@@ -193,6 +205,8 @@ export function PerformancePage() {
         <AccountsTab
           items={items.filter((i) => i.is_active)}
           perfAccts={perfAccts}
+          rebalances={rebalances}
+          period={period}
           onAdd={async (item_id) => {
             if (!household) return;
             await addPerfAccount(household.id, item_id);
@@ -203,6 +217,15 @@ export function PerformancePage() {
             invalidateAccts();
             invalidateRates();
           }}
+          onAddRebalance={async (account_id, month) => {
+            if (!household) return;
+            await addRebalance(household.id, account_id, month);
+            invalidateRebalances();
+          }}
+          onRemoveRebalance={async (rebalanceId) => {
+            await removeRebalance(rebalanceId);
+            invalidateRebalances();
+          }}
         />
       )}
 
@@ -211,6 +234,7 @@ export function PerformancePage() {
           items={items}
           perfAccts={perfAccts}
           rates={rates}
+          rebalances={rebalances}
           period={period}
           onSaveRate={async (accountId, month, rate) => {
             await upsertPerfRate(accountId, month, rate);
@@ -271,13 +295,21 @@ export function PerformancePage() {
 function AccountsTab({
   items,
   perfAccts,
+  rebalances,
+  period,
   onAdd,
   onRemove,
+  onAddRebalance,
+  onRemoveRebalance,
 }: {
   items: BsItem[];
   perfAccts: PerfAccount[];
+  rebalances: Rebalance[];
+  period: Period;
   onAdd: (item_id: string) => Promise<void>;
   onRemove: (perfAcctId: string) => Promise<void>;
+  onAddRebalance: (account_id: string, month: string) => Promise<void>;
+  onRemoveRebalance: (rebalanceId: string) => Promise<void>;
 }) {
   const portfolioAccts = perfAccts.filter((a) => a.item_id != null);
   const factorAccts = perfAccts.filter((a) => a.factor_key != null);
@@ -366,7 +398,156 @@ function AccountsTab({
           </div>
         </Card>
       )}
+
+      {/* Rebalances */}
+      {portfolioAccts.length > 0 && (
+        <RebalanceSection
+          items={items}
+          perfAccts={portfolioAccts}
+          rebalances={rebalances}
+          period={period}
+          onAdd={onAddRebalance}
+          onRemove={onRemoveRebalance}
+        />
+      )}
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Rebalance section — add/remove rebalance markers
+// ---------------------------------------------------------------------------
+
+function RebalanceSection({
+  items,
+  perfAccts,
+  rebalances,
+  period,
+  onAdd,
+  onRemove,
+}: {
+  items: BsItem[];
+  perfAccts: PerfAccount[];
+  rebalances: Rebalance[];
+  period: Period;
+  onAdd: (account_id: string, month: string) => Promise<void>;
+  onRemove: (rebalanceId: string) => Promise<void>;
+}) {
+  const [selectedAcctId, setSelectedAcctId] = useState(perfAccts[0]?.id ?? '');
+  const [selectedYear, setSelectedYear] = useState(period.year);
+  const [selectedMonth, setSelectedMonth] = useState(period.month);
+  const [saving, setSaving] = useState(false);
+
+  const years = useMemo(() => {
+    const out: number[] = [];
+    for (let y = period.year - 5; y <= period.year; y++) out.push(y);
+    return out;
+  }, [period.year]);
+
+  const acctNameMap = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const a of perfAccts) {
+      const item = items.find((i) => i.id === a.item_id);
+      m.set(a.id, item?.name ?? a.label ?? 'Unknown');
+    }
+    return m;
+  }, [perfAccts, items]);
+
+  const handleAdd = async () => {
+    if (!selectedAcctId || saving) return;
+    const monthIso = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-01`;
+    setSaving(true);
+    try {
+      await onAdd(selectedAcctId, monthIso);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Card padded={false}>
+      <div className="border-b border-navy-100 px-4 py-2.5">
+        <h3 className="text-sm font-semibold text-navy-800">Rebalances</h3>
+        <p className="mt-0.5 text-xs text-gray-500">
+          Mark months when an account was rebalanced. These will be highlighted on the Rates tab.
+        </p>
+      </div>
+
+      <div className="px-4 py-3">
+        <div className="flex flex-wrap items-end gap-3">
+          <div>
+            <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-navy-600">Account</label>
+            <select
+              value={selectedAcctId}
+              onChange={(e) => setSelectedAcctId(e.target.value)}
+              className="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-navy-800 focus:border-navy-500 focus:outline-none focus:ring-1 focus:ring-navy-500"
+            >
+              {perfAccts.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {acctNameMap.get(a.id)}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-navy-600">Month</label>
+            <div className="flex gap-1.5">
+              <select
+                value={selectedMonth}
+                onChange={(e) => setSelectedMonth(Number(e.target.value))}
+                className="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-navy-800 focus:border-navy-500 focus:outline-none focus:ring-1 focus:ring-navy-500"
+              >
+                {MONTH_NAMES_SHORT.map((m, i) => (
+                  <option key={i} value={i + 1}>{m}</option>
+                ))}
+              </select>
+              <select
+                value={selectedYear}
+                onChange={(e) => setSelectedYear(Number(e.target.value))}
+                className="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-navy-800 focus:border-navy-500 focus:outline-none focus:ring-1 focus:ring-navy-500"
+              >
+                {years.map((y) => (
+                  <option key={y} value={y}>{y}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <Button variant="primary" size="sm" disabled={saving} onClick={handleAdd}>
+            {saving ? 'Adding…' : '+ Add Rebalance'}
+          </Button>
+        </div>
+      </div>
+
+      {rebalances.length > 0 && (
+        <div className="border-t border-navy-100 divide-y divide-navy-100">
+          {rebalances.map((rb) => {
+            const [y, m] = rb.month.split('-');
+            const label = `${MONTH_NAMES_SHORT[Number(m) - 1]} ${y}`;
+            return (
+              <div key={rb.id} className="flex items-center justify-between px-4 py-2">
+                <div className="flex items-center gap-2">
+                  <span className="inline-flex items-center gap-1 rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-semibold text-indigo-700">
+                    <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182" />
+                    </svg>
+                    {label}
+                  </span>
+                  <span className="text-sm font-medium text-navy-800">
+                    {acctNameMap.get(rb.account_id) ?? 'Unknown'}
+                  </span>
+                </div>
+                <button
+                  onClick={() => onRemove(rb.id)}
+                  className="text-xs text-neg hover:underline"
+                >
+                  Remove
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </Card>
   );
 }
 
@@ -378,12 +559,14 @@ function RatesTab({
   items,
   perfAccts,
   rates,
+  rebalances,
   period,
   onSaveRate,
 }: {
   items: BsItem[];
   perfAccts: PerfAccount[];
   rates: PerfRate[];
+  rebalances: Rebalance[];
   period: Period;
   onSaveRate: (accountId: string, month: string, rate: number) => Promise<void>;
 }) {
@@ -415,6 +598,20 @@ function RatesTab({
     }
     return out;
   }, [perfAccts, items]);
+
+  // Build a set of "accountId|monthIso" keys for rebalanced months
+  const rebalanceKeys = useMemo(() => {
+    const s = new Set<string>();
+    for (const rb of rebalances) s.add(`${rb.account_id}|${rb.month}`);
+    return s;
+  }, [rebalances]);
+
+  // Set of month ISOs that have any rebalance (for column header highlighting)
+  const rebalancedMonths = useMemo(() => {
+    const s = new Set<string>();
+    for (const rb of rebalances) s.add(rb.month);
+    return s;
+  }, [rebalances]);
 
   // Determine if any Fama-French factor is missing a rate for the selected month
   const selectedMonthIso = `${period.year}-${String(period.month).padStart(2, '0')}-01`;
@@ -471,14 +668,30 @@ function RatesTab({
               >
                 Account
               </div>
-              {months.map((p) => (
-                <div
-                  key={periodKey(p)}
-                  className={`${colMonth} shrink-0 border-r border-navy-100 px-3 py-3 text-right text-xs font-bold uppercase tracking-wide text-navy-700`}
-                >
-                  {MONTH_NAMES_SHORT[p.month - 1]} {String(p.year).slice(2)}
-                </div>
-              ))}
+              {months.map((p) => {
+                const monthIso = `${p.year}-${String(p.month).padStart(2, '0')}-01`;
+                const hasRebalance = rebalancedMonths.has(monthIso);
+                return (
+                  <div
+                    key={periodKey(p)}
+                    className={`${colMonth} shrink-0 border-r border-navy-100 px-3 py-3 text-right text-xs font-bold uppercase tracking-wide ${
+                      hasRebalance
+                        ? 'bg-indigo-50 text-indigo-700'
+                        : 'text-navy-700'
+                    }`}
+                    title={hasRebalance ? 'Rebalance occurred this month' : undefined}
+                  >
+                    <span className="flex items-center justify-end gap-1">
+                      {hasRebalance && (
+                        <svg className="h-3 w-3 text-indigo-500" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182" />
+                        </svg>
+                      )}
+                      {MONTH_NAMES_SHORT[p.month - 1]} {String(p.year).slice(2)}
+                    </span>
+                  </div>
+                );
+              })}
             </div>
 
             {/* Rows */}
@@ -504,6 +717,8 @@ function RatesTab({
                   {months.map((p, mi) => {
                     const monthIso = `${p.year}-${String(p.month).padStart(2, '0')}-01`;
                     const val = rateLookup.get(`${perfAcct.id}|${monthIso}`);
+                    const isRebalanced = rebalanceKeys.has(`${perfAcct.id}|${monthIso}`);
+                    const monthHasAnyRebalance = rebalancedMonths.has(monthIso);
                     return (
                       <RateCell
                         key={periodKey(p)}
@@ -517,6 +732,8 @@ function RatesTab({
                         value={val}
                         colMonth={colMonth}
                         isFactor={isFactor}
+                        isRebalanced={isRebalanced}
+                        monthHasRebalance={monthHasAnyRebalance}
                         onSave={(raw) => {
                           const cleaned = raw.replace(/%/g, '').trim();
                           if (cleaned === '') return;
@@ -1192,6 +1409,8 @@ function RateCell({
   value,
   colMonth,
   isFactor,
+  isRebalanced,
+  monthHasRebalance,
   onSave,
 }: {
   acctId: string;
@@ -1204,6 +1423,8 @@ function RateCell({
   value: number | undefined;
   colMonth: string;
   isFactor: boolean;
+  isRebalanced: boolean;
+  monthHasRebalance: boolean;
   onSave: (raw: string) => void;
 }) {
   const [editing, setEditing] = useState(false);
@@ -1224,6 +1445,12 @@ function RateCell({
 
   const baseline = value == null ? '' : String(value);
   const readOnly = isFactor && value == null;
+
+  const rebalanceBg = isRebalanced
+    ? 'bg-indigo-100/60'
+    : monthHasRebalance
+      ? 'bg-indigo-50/40'
+      : '';
 
   const normalizeDraft = (d: string) => d.replace(/%/g, '').trim();
 
@@ -1246,7 +1473,7 @@ function RateCell({
   // Factor cells without imported data are read-only
   if (readOnly) {
     return (
-      <div className={`${colMonth} shrink-0 border-b border-r border-gray-100 text-sm tabular-nums`}>
+      <div className={`${colMonth} shrink-0 border-b border-r border-gray-100 text-sm tabular-nums ${rebalanceBg}`}>
         <div
           data-rate-cell={cellId}
           className="flex h-full min-h-[36px] w-full items-center justify-end px-2 text-right text-[11px] italic text-gray-400 select-none"
@@ -1261,7 +1488,7 @@ function RateCell({
   // Factor cells with imported data: display-only (not editable)
   if (isFactor && value != null) {
     return (
-      <div className={`${colMonth} shrink-0 border-b border-r border-gray-100 text-sm tabular-nums`}>
+      <div className={`${colMonth} shrink-0 border-b border-r border-gray-100 text-sm tabular-nums ${rebalanceBg}`}>
         <div
           data-rate-cell={cellId}
           className={`flex h-full min-h-[36px] w-full items-center justify-end px-3 text-right font-medium select-none ${
@@ -1281,7 +1508,7 @@ function RateCell({
 
   if (!editing) {
     return (
-      <div className={`${colMonth} shrink-0 border-b border-r border-gray-100 text-sm tabular-nums`}>
+      <div className={`${colMonth} shrink-0 border-b border-r border-gray-100 text-sm tabular-nums ${rebalanceBg}`}>
         <button
           type="button"
           data-rate-cell={cellId}
@@ -1306,7 +1533,7 @@ function RateCell({
   }
 
   return (
-    <div className={`${colMonth} shrink-0 border-b border-r border-gray-100 text-sm`}>
+    <div className={`${colMonth} shrink-0 border-b border-r border-gray-100 text-sm ${rebalanceBg}`}>
       <input
         data-rate-cell={cellId}
         autoFocus

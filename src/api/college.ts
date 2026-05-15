@@ -35,6 +35,8 @@ export interface CollegeKid {
   annual_cost: number | null;
   /** Annual cost inflation as a decimal. Null = use default (5%). */
   cost_inflation: number | null;
+  /** Optional linked balance-sheet item (e.g. a 529 account) for tracking historical balances. */
+  bs_item_id: string | null;
 }
 
 export const DEFAULT_ANNUAL_COST = 30000;
@@ -49,7 +51,7 @@ export async function fetchCollegeKids(
   const { data, error } = await supabase
     .from('tf_college_kids')
     .select(
-      'id, name, birth_year, current_balance, monthly_contrib, return_rate, start_year, duration_years, annual_cost, cost_inflation',
+      'id, name, birth_year, current_balance, monthly_contrib, return_rate, start_year, duration_years, annual_cost, cost_inflation, bs_item_id',
     )
     .eq('household_id', household_id)
     .order('birth_year', { ascending: true });
@@ -65,6 +67,7 @@ export async function fetchCollegeKids(
     duration_years: r.duration_years,
     annual_cost: r.annual_cost == null ? null : Number(r.annual_cost),
     cost_inflation: r.cost_inflation == null ? null : Number(r.cost_inflation),
+    bs_item_id: r.bs_item_id ?? null,
   }));
 }
 
@@ -87,7 +90,7 @@ export async function createCollegeKid(args: {
       cost_inflation: DEFAULT_COST_INFLATION,
     })
     .select(
-      'id, name, birth_year, current_balance, monthly_contrib, return_rate, start_year, duration_years, annual_cost, cost_inflation',
+      'id, name, birth_year, current_balance, monthly_contrib, return_rate, start_year, duration_years, annual_cost, cost_inflation, bs_item_id',
     )
     .single();
   if (error) throw error;
@@ -103,6 +106,7 @@ export async function createCollegeKid(args: {
     annual_cost: data.annual_cost == null ? null : Number(data.annual_cost),
     cost_inflation:
       data.cost_inflation == null ? null : Number(data.cost_inflation),
+    bs_item_id: data.bs_item_id ?? null,
   };
 }
 
@@ -118,6 +122,7 @@ export async function updateCollegeKid(args: {
     duration_years: number;
     annual_cost: number | null;
     cost_inflation: number | null;
+    bs_item_id: string | null;
   }>;
 }): Promise<void> {
   const { error } = await supabase

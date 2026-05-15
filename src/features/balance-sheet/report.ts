@@ -58,7 +58,7 @@ export function buildBalanceSheetReport(args: {
   const targetIso = periodToBsMonth(args.asOf);
   const effective = effectiveValuesAt(args.values, targetIso);
 
-  const active = args.items.filter((i) => i.is_active);
+  const active = args.items.filter((i) => i.is_active && i.type !== 'off_balance_sheet');
   const assets: BalanceSheetLine[] = [];
   const liabilities: BalanceSheetLine[] = [];
 
