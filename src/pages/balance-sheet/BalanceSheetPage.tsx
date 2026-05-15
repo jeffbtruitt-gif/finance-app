@@ -394,7 +394,7 @@ function ValueEditorPanel(props: ValueEditorProps) {
 
   const itemValues = valuesForItem(values, item.id);
 
-  const initialPeriod = (() => {
+  const currentPeriod = (() => {
     const [y, m] = targetIso.split('-');
     return { year: Number(y), month: Number(m) };
   })();
@@ -421,11 +421,11 @@ function ValueEditorPanel(props: ValueEditorProps) {
       </div>
 
       <QuickAddValue
-        defaultPeriod={initialPeriod}
-        onSave={async (period, value, notes) => {
+        period={currentPeriod}
+        onSave={async (p, value, notes) => {
           await onSave({
             item_id: item.id,
-            as_of_month: periodToBsMonth(period),
+            as_of_month: periodToBsMonth(p),
             value,
             notes,
           });
@@ -484,14 +484,12 @@ function ValueEditorPanel(props: ValueEditorProps) {
 }
 
 function QuickAddValue({
-  defaultPeriod,
+  period,
   onSave,
 }: {
-  defaultPeriod: Period;
+  period: Period;
   onSave: (p: Period, value: number, notes: string | null) => Promise<void>;
 }) {
-  const [year, setYear] = useState(defaultPeriod.year);
-  const [month, setMonth] = useState(defaultPeriod.month);
   const [valueStr, setValueStr] = useState('');
   const [notes, setNotes] = useState('');
   const [busy, setBusy] = useState(false);
@@ -501,7 +499,7 @@ function QuickAddValue({
     if (!Number.isFinite(num)) return;
     setBusy(true);
     try {
-      await onSave({ year, month }, num, notes.trim() || null);
+      await onSave(period, num, notes.trim() || null);
       setValueStr('');
       setNotes('');
     } finally {
@@ -513,50 +511,39 @@ function QuickAddValue({
     'rounded-md border border-gray-300 bg-white px-2 py-1 text-sm focus:border-navy-500 focus:outline-none focus:ring-2 focus:ring-navy-200';
   return (
     <div className="border-t border-navy-100 px-4 py-3">
-      <div className="text-label uppercase tracking-wider text-gray-500">
-        Add / overwrite value
+      <div className="flex items-center justify-between">
+        <div className="text-label uppercase tracking-wider text-gray-500">
+          Add / overwrite value
+        </div>
+        <div className="rounded-md bg-navy-50 px-3 py-1 text-sm font-semibold tabular-nums text-navy-800">
+          {MONTH_NAMES_LONG[period.month - 1]} {period.year}
+        </div>
       </div>
-      <div className="mt-2 grid grid-cols-2 gap-2">
-        <select
-          value={month}
-          onChange={(e) => setMonth(Number(e.target.value))}
-          className={inputCls}
-        >
-          {MONTH_NAMES_LONG.map((n, i) => (
-            <option key={i} value={i + 1}>
-              {n}
-            </option>
-          ))}
-        </select>
-        <input
-          type="number"
-          value={year}
-          onChange={(e) => setYear(Number(e.target.value))}
-          className={`${inputCls} tabular-nums`}
-        />
+      <p className="mt-1 text-xs text-gray-400">
+        Use the period selector at the top of the page to change the input month.
+      </p>
+      <div className="mt-2 grid grid-cols-1 gap-2">
         <input
           value={valueStr}
           onChange={(e) => setValueStr(e.target.value)}
           placeholder="Value"
-          className={`col-span-2 ${inputCls} tabular-nums`}
+          className={`${inputCls} tabular-nums`}
         />
         <input
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           placeholder="Notes (optional)"
-          className={`col-span-2 ${inputCls}`}
+          className={inputCls}
         />
-        <div className="col-span-2">
-          <Button
-            variant="primary"
-            size="md"
-            onClick={submit}
-            disabled={busy || !valueStr.trim()}
-            className="w-full"
-          >
-            Save
-          </Button>
-        </div>
+        <Button
+          variant="primary"
+          size="md"
+          onClick={submit}
+          disabled={busy || !valueStr.trim()}
+          className="w-full"
+        >
+          Save
+        </Button>
       </div>
     </div>
   );

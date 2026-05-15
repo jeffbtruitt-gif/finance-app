@@ -19,7 +19,7 @@
  * the schema. (See migration 10 docstring + api/college.ts decisions.)
  */
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useHousehold } from '@/api/household';
 import { useDefaultPeriod } from '@/lib/useDefaultPeriod';
@@ -84,21 +84,15 @@ export function CollegePage() {
   const bsItems = bsItemsQ.data ?? [];
   const bsValues = bsValuesQ.data ?? [];
 
-  const [newName, setNewName] = useState('');
-  const [newBirthYear, setNewBirthYear] = useState('');
+  const [showAddModal, setShowAddModal] = useState(false);
 
-  async function addKid() {
+  async function addKid(name: string, birthYear: number) {
     if (!household) return;
-    const name = newName.trim();
-    const by = parseInt(newBirthYear, 10);
-    if (!name || !Number.isFinite(by) || by < 1900 || by > 2100) return;
     await createCollegeKid({
       household_id: household.id,
       name,
-      birth_year: by,
+      birth_year: birthYear,
     });
-    setNewName('');
-    setNewBirthYear('');
     qc.invalidateQueries({ queryKey: ['college-kids', household.id] });
   }
 
@@ -141,9 +135,6 @@ export function CollegePage() {
   const totalSurplus = surplusByKid.reduce((s, v) => s + v, 0);
   const allOnTrack = projections.length > 0 && projections.every((p) => p.onTrack);
 
-  const inputCls =
-    'rounded-md border border-gray-300 bg-white px-2 py-1 text-sm focus:border-navy-500 focus:outline-none focus:ring-2 focus:ring-navy-200';
-
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
@@ -168,42 +159,16 @@ export function CollegePage() {
             </a>
           </div>
         </div>
-        {projections.length > 0 && (
-          <CollegeSummaryBadge totalSurplus={totalSurplus} allOnTrack={allOnTrack} />
-        )}
+        <div className="flex items-center gap-3">
+          {projections.length > 0 && (
+            <CollegeSummaryBadge totalSurplus={totalSurplus} allOnTrack={allOnTrack} />
+          )}
+          <Button variant="primary" size="sm" onClick={() => setShowAddModal(true)}>
+            + Add Kid
+          </Button>
+        </div>
       </div>
 
-      <Card>
-        <div className="text-h4 text-navy-800">Add a kid</div>
-        <div className="mt-2 flex flex-wrap items-center gap-2">
-          <input
-            value={newName}
-            onChange={(e) => setNewName(e.target.value)}
-            placeholder="Name"
-            className={`w-48 ${inputCls}`}
-          />
-          <input
-            value={newBirthYear}
-            onChange={(e) => setNewBirthYear(e.target.value)}
-            placeholder="Birth year (e.g. 2018)"
-            inputMode="numeric"
-            className={`w-40 ${inputCls}`}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') addKid();
-            }}
-          />
-          <Button size="sm" onClick={addKid}>
-            Add
-          </Button>
-          <div className="text-caption text-gray-500">
-            Defaults: ${DEFAULT_ANNUAL_COST.toLocaleString()}/yr cost,{' '}
-            {(DEFAULT_COST_INFLATION * 100).toFixed(0)}% inflation, 6% return,
-            4-yr undergrad starting at age 18.
-          </div>
-        </div>
-      </Card>
-
-      {/* Per-kid sections */}
       {projections.length === 0 && (
         <StatusPanel
           kind="empty"
@@ -222,6 +187,16 @@ export function CollegePage() {
           currentYear={currentYear}
         />
       ))}
+
+      {showAddModal && (
+        <AddKidModal
+          onAdd={async (name, birthYear) => {
+            await addKid(name, birthYear);
+            setShowAddModal(false);
+          }}
+          onClose={() => setShowAddModal(false)}
+        />
+      )}
     </div>
   );
 }
@@ -249,6 +224,99 @@ function CollegeSummaryBadge({
     <Badge tone="neg" dot>
       Behind by {privUsd(Math.abs(totalSurplus))} across kids
     </Badge>
+  );
+}
+
+function AddKidModal({
+  onAdd,
+  onClose,
+}: {
+  onAdd: (name: string, birthYear: number) => Promise<void>;
+  onClose: () => void;
+}) {
+  const [name, setName] = useState('');
+  const [birthYear, setBirthYear] = useState('');
+  const [busy, setBusy] = useState(false);
+  const backdropRef = useRef<HTMLDivElement>(null);
+  const nameRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => { nameRef.current?.focus(); }, []);
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) { if (e.key === 'Escape') onClose(); }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  async function submit() {
+    const trimmed = name.trim();
+    const by = parseInt(birthYear, 10);
+    if (!trimmed || !Number.isFinite(by) || by < 1900 || by > 2100) return;
+    setBusy(true);
+    try {
+      await onAdd(trimmed, by);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const inputCls =
+    'w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:border-navy-500 focus:outline-none focus:ring-2 focus:ring-navy-200';
+
+  return (
+    <div
+      ref={backdropRef}
+      onClick={(e) => { if (e.target === backdropRef.current) onClose(); }}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+    >
+      <div className="mx-4 w-full max-w-md rounded-xl bg-white shadow-2xl">
+        <div className="border-b border-navy-100 px-6 py-4">
+          <h2 className="text-lg font-bold text-navy-900">Add a Kid</h2>
+        </div>
+        <div className="space-y-4 px-6 py-5">
+          <div>
+            <label className="mb-1 block text-xs font-medium text-gray-600">Name *</label>
+            <input
+              ref={nameRef}
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') submit(); }}
+              className={inputCls}
+              placeholder="e.g. Cooper"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-gray-600">Birth year *</label>
+            <input
+              value={birthYear}
+              onChange={(e) => setBirthYear(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') submit(); }}
+              inputMode="numeric"
+              className={inputCls}
+              placeholder="e.g. 2018"
+            />
+          </div>
+          <p className="text-xs text-gray-400">
+            Defaults: ${DEFAULT_ANNUAL_COST.toLocaleString()}/yr cost,{' '}
+            {(DEFAULT_COST_INFLATION * 100).toFixed(0)}% inflation, 6% return,
+            4-yr undergrad starting at age 18.
+          </p>
+        </div>
+        <div className="flex items-center justify-end gap-2 border-t border-navy-100 px-6 py-4">
+          <Button variant="secondary" size="sm" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            variant="primary"
+            size="sm"
+            disabled={busy || !name.trim() || !birthYear.trim()}
+            onClick={submit}
+          >
+            Add Kid
+          </Button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -385,6 +453,34 @@ function KidSection({
       </div>
 
       <div className="grid grid-cols-1 gap-x-6 gap-y-2 border-b border-navy-100 p-4 md:grid-cols-2 lg:grid-cols-3">
+        <div className="flex items-center justify-between gap-3 md:col-span-2 lg:col-span-3">
+          <label className="shrink-0 text-sm text-gray-700">Linked account</label>
+          <select
+            value={kid.bs_item_id ?? ''}
+            onChange={(e) => {
+              const itemId = e.target.value || null;
+              const patch: Parameters<typeof onPatch>[0] = { bs_item_id: itemId };
+              if (itemId) {
+                const now = new Date();
+                const iso = periodToBsMonth({ year: now.getFullYear(), month: now.getMonth() + 1 });
+                const eff = effectiveValuesAt(bsValues.filter((v) => v.item_id === itemId), iso);
+                const balance = eff.get(itemId);
+                if (balance != null) patch.current_balance = balance;
+              }
+              onPatch(patch);
+            }}
+            className="min-w-0 flex-1 rounded-md border border-gray-200 bg-white px-2 py-1 text-sm focus:border-navy-500 focus:outline-none focus:ring-2 focus:ring-navy-200"
+          >
+            <option value="">— none —</option>
+            {bsItems
+              .filter((i) => i.is_active && i.equity_group === 'College')
+              .map((i) => (
+                <option key={i.id} value={i.id}>
+                  {i.name}
+                </option>
+              ))}
+          </select>
+        </div>
         <KidInput
           label="Current balance"
           value={kid.current_balance}
@@ -437,46 +533,30 @@ function KidSection({
             onPatch({ birth_year: Math.round(v ?? kid.birth_year) })
           }
         />
-        <div className="flex items-center justify-between gap-3">
-          <label className="text-sm text-gray-700">Linked account</label>
-          <select
-            value={kid.bs_item_id ?? ''}
-            onChange={(e) => onPatch({ bs_item_id: e.target.value || null })}
-            className="w-48 rounded-md border border-gray-200 bg-white px-2 py-1 text-right text-sm focus:border-navy-500 focus:outline-none focus:ring-2 focus:ring-navy-200"
-          >
-            <option value="">— none —</option>
-            {bsItems
-              .filter((i) => i.is_active && i.equity_group === 'College')
-              .map((i) => (
-                <option key={i.id} value={i.id}>
-                  {i.name}
-                </option>
-              ))}
-          </select>
-        </div>
       </div>
 
-      {linkedItem && historicalPoints.length > 0 && (
-        <div className="border-b border-navy-100 p-4">
+      <div className={`grid border-b border-navy-100 ${linkedItem && historicalPoints.length > 0 ? 'grid-cols-1 md:grid-cols-2' : 'grid-cols-1'}`}>
+        {linkedItem && historicalPoints.length > 0 && (
+          <div className="border-b border-navy-100 p-4 md:border-b-0 md:border-r">
+            <LineChart
+              points={historicalPoints}
+              title={`${linkedItem.name} — historical balance`}
+              subtitle="Actual recorded values from the balance sheet"
+              color="#6366f1"
+              formatX={(x) => {
+                const pt = historicalPoints.find((p) => p.x === x);
+                return pt?.label ?? String(x);
+              }}
+            />
+          </div>
+        )}
+        <div className="p-4">
           <LineChart
-            points={historicalPoints}
-            title={`${linkedItem.name} — historical balance`}
-            subtitle="Actual recorded values from the balance sheet"
-            color="#6366f1"
-            formatX={(x) => {
-              const pt = historicalPoints.find((p) => p.x === x);
-              return pt?.label ?? String(x);
-            }}
+            points={linePoints}
+            title="Balance trajectory"
+            subtitle={`Through graduation (${projection.graduationYear})`}
           />
         </div>
-      )}
-
-      <div className="border-b border-navy-100 p-4">
-        <LineChart
-          points={linePoints}
-          title="Balance trajectory"
-          subtitle={`Through graduation (${projection.graduationYear})`}
-        />
       </div>
 
       <KidTable projection={projection} />
