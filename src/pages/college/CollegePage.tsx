@@ -123,12 +123,20 @@ export function CollegePage() {
   }
 
   const kids = kidsQ.data ?? [];
-  const projections = kids.map((k) =>
-    buildCollegeProjection(k, {
+  const projections = kids.map((k) => {
+    let effectiveKid = k;
+    if (k.bs_item_id) {
+      const now = new Date();
+      const iso = periodToBsMonth({ year: now.getFullYear(), month: now.getMonth() + 1 });
+      const eff = effectiveValuesAt(bsValues.filter((v) => v.item_id === k.bs_item_id), iso);
+      const bal = eff.get(k.bs_item_id!);
+      if (bal != null) effectiveKid = { ...k, current_balance: bal };
+    }
+    return buildCollegeProjection(effectiveKid, {
       currentYear,
       monthsLeftInCurrentYear: monthsLeft,
-    }),
-  );
+    });
+  });
 
   // Summary across kids: combined surplus / shortfall after each kid graduates.
   const surplusByKid = projections.map((p) => p.finalBalance);
@@ -346,6 +354,14 @@ function KidSection({
     ? bsItems.find((i) => i.id === kid.bs_item_id) ?? null
     : null;
 
+  const linkedBalance = useMemo(() => {
+    if (!kid.bs_item_id) return null;
+    const now = new Date();
+    const iso = periodToBsMonth({ year: now.getFullYear(), month: now.getMonth() + 1 });
+    const eff = effectiveValuesAt(bsValues.filter((v) => v.item_id === kid.bs_item_id), iso);
+    return eff.get(kid.bs_item_id!) ?? null;
+  }, [kid.bs_item_id, bsValues]);
+
   const historicalPoints = useMemo(() => {
     if (!kid.bs_item_id) return [];
     const itemValues = bsValues.filter((v) => v.item_id === kid.bs_item_id);
@@ -481,12 +497,24 @@ function KidSection({
               ))}
           </select>
         </div>
-        <KidInput
-          label="Current balance"
-          value={kid.current_balance}
-          kind="dollars"
-          onCommit={(v) => onPatch({ current_balance: v ?? 0 })}
-        />
+        {linkedBalance != null ? (
+          <div className="flex items-center justify-between gap-3">
+            <label className="text-sm text-gray-700">Current balance</label>
+            <div className="flex items-center gap-1">
+              <span className="w-32 rounded-md border border-gray-100 bg-gray-50 px-2 py-1 text-right text-sm tabular-nums text-navy-800">
+                {privUsd(linkedBalance)}
+              </span>
+              <span className="w-3" />
+            </div>
+          </div>
+        ) : (
+          <KidInput
+            label="Current balance"
+            value={kid.current_balance}
+            kind="dollars"
+            onCommit={(v) => onPatch({ current_balance: v ?? 0 })}
+          />
+        )}
         <KidInput
           label="Monthly contribution"
           value={kid.monthly_contrib}
