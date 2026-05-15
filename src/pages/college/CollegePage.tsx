@@ -446,11 +446,10 @@ function KidSection({
           >
             <option value="">— none —</option>
             {bsItems
-              .filter((i) => i.is_active)
+              .filter((i) => i.is_active && i.equity_group === 'College')
               .map((i) => (
                 <option key={i.id} value={i.id}>
                   {i.name}
-                  {i.type === 'off_balance_sheet' ? ' (OBS)' : i.type === 'asset' ? '' : ' (liability)'}
                 </option>
               ))}
           </select>

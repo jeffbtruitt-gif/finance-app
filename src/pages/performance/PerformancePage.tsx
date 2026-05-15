@@ -205,8 +205,6 @@ export function PerformancePage() {
         <AccountsTab
           items={items.filter((i) => i.is_active)}
           perfAccts={perfAccts}
-          rebalances={rebalances}
-          period={period}
           onAdd={async (item_id) => {
             if (!household) return;
             await addPerfAccount(household.id, item_id);
@@ -216,15 +214,6 @@ export function PerformancePage() {
             await removePerfAccount(perfAcctId);
             invalidateAccts();
             invalidateRates();
-          }}
-          onAddRebalance={async (account_id, month) => {
-            if (!household) return;
-            await addRebalance(household.id, account_id, month);
-            invalidateRebalances();
-          }}
-          onRemoveRebalance={async (rebalanceId) => {
-            await removeRebalance(rebalanceId);
-            invalidateRebalances();
           }}
         />
       )}
@@ -239,6 +228,15 @@ export function PerformancePage() {
           onSaveRate={async (accountId, month, rate) => {
             await upsertPerfRate(accountId, month, rate);
             invalidateRates();
+          }}
+          onAddRebalance={async (account_id, month) => {
+            if (!household) return;
+            await addRebalance(household.id, account_id, month);
+            invalidateRebalances();
+          }}
+          onRemoveRebalance={async (rebalanceId) => {
+            await removeRebalance(rebalanceId);
+            invalidateRebalances();
           }}
         />
       )}
@@ -295,21 +293,13 @@ export function PerformancePage() {
 function AccountsTab({
   items,
   perfAccts,
-  rebalances,
-  period,
   onAdd,
   onRemove,
-  onAddRebalance,
-  onRemoveRebalance,
 }: {
   items: BsItem[];
   perfAccts: PerfAccount[];
-  rebalances: Rebalance[];
-  period: Period;
   onAdd: (item_id: string) => Promise<void>;
   onRemove: (perfAcctId: string) => Promise<void>;
-  onAddRebalance: (account_id: string, month: string) => Promise<void>;
-  onRemoveRebalance: (rebalanceId: string) => Promise<void>;
 }) {
   const portfolioAccts = perfAccts.filter((a) => a.item_id != null);
   const factorAccts = perfAccts.filter((a) => a.factor_key != null);
@@ -397,18 +387,6 @@ function AccountsTab({
             ))}
           </div>
         </Card>
-      )}
-
-      {/* Rebalances */}
-      {portfolioAccts.length > 0 && (
-        <RebalanceSection
-          items={items}
-          perfAccts={portfolioAccts}
-          rebalances={rebalances}
-          period={period}
-          onAdd={onAddRebalance}
-          onRemove={onRemoveRebalance}
-        />
       )}
     </div>
   );
@@ -562,6 +540,8 @@ function RatesTab({
   rebalances,
   period,
   onSaveRate,
+  onAddRebalance,
+  onRemoveRebalance,
 }: {
   items: BsItem[];
   perfAccts: PerfAccount[];
@@ -569,6 +549,8 @@ function RatesTab({
   rebalances: Rebalance[];
   period: Period;
   onSaveRate: (accountId: string, month: string, rate: number) => Promise<void>;
+  onAddRebalance: (account_id: string, month: string) => Promise<void>;
+  onRemoveRebalance: (rebalanceId: string) => Promise<void>;
 }) {
   const months = useMemo(() => {
     const out: Period[] = [];
@@ -750,6 +732,18 @@ function RatesTab({
           </div>
         </div>
       </Card>
+
+      {/* Rebalance controls below the grid */}
+      {rows.filter((r) => !r.isFactor).length > 0 && (
+        <RebalanceSection
+          items={items}
+          perfAccts={perfAccts.filter((a) => a.item_id != null)}
+          rebalances={rebalances}
+          period={period}
+          onAdd={onAddRebalance}
+          onRemove={onRemoveRebalance}
+        />
+      )}
     </div>
   );
 }

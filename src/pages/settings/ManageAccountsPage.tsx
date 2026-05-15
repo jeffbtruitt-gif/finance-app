@@ -23,6 +23,7 @@ const KNOWN_EQUITY_GROUPS = [
   'Retirement',
   'Investments',
   'Savings',
+  'College',
   'Credit Union',
   'House',
   'Car',
