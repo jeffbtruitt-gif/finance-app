@@ -29,9 +29,6 @@ export function PortfolioReturnsBarLine({ months, returns, portfolioName }: Prop
   const tickVals = Array.from({ length: ticks + 1 }, (_, i) => sc.yMax - ((sc.yMax - sc.yMin) * i) / ticks);
   const barW = (innerW / returns.length) * 0.62;
   const zeroY = sc.yToPx(0);
-  const linePath = returns
-    .map((v, i) => `${i === 0 ? 'M' : 'L'}${xToPx(i).toFixed(1)},${sc.yToPx(v).toFixed(1)}`)
-    .join(' ');
 
   const avg = returns.reduce((a, b) => a + b, 0) / returns.length;
   const best = Math.max(...returns);
@@ -90,14 +87,10 @@ export function PortfolioReturnsBarLine({ months, returns, portfolioName }: Prop
               />
             );
           })}
-          <path d={linePath} fill="none" stroke="#243460" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-          {returns.map((v, i) => (
-            <circle key={i} cx={xToPx(i)} cy={sc.yToPx(v)} r="2.2" fill={v >= 0 ? '#1e7e5a' : '#c0392b'} />
-          ))}
           {months.map(
             (m, i) =>
               (i % 4 === 0 || i === months.length - 1) && (
-                <text key={i} x={xToPx(i)} y={H - PB + 16} fontSize="10" textAnchor="middle" fill="#717889">
+                <text key={i} x={xToPx(i)} y={H - PB + 16} fontSize="8" textAnchor="middle" fill="#717889">
                   {m}
                 </text>
               ),

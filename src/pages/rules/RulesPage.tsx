@@ -9,6 +9,7 @@ import { countMatches } from '@/features/rules/engine';
 import type { MatchableTransaction } from '@/types/phase2';
 import { Button } from '@/components/ds';
 import { StatusPanel } from '@/components/StatusPanel';
+import { ColumnFilterPopover } from '@/pages/transactions/ColumnFilterPopover';
 import { IconBolt, IconClose, IconPlay, IconSearch } from './rulesIcons';
 import { SCROLL_TIDY, StatCard } from './rulesShared';
 import { RuleRow } from './RuleRow';
@@ -143,6 +144,17 @@ export function RulesPage() {
 
   const activeCount = orderedRules.filter((r) => r.is_active).length;
 
+  const activeFilterCount =
+    (search.trim() ? 1 : 0) +
+    (activeFilter !== 'active' ? 1 : 0) +
+    (categoryFilter !== ALL_CATEGORIES ? 1 : 0);
+
+  const clearAllFilters = () => {
+    setSearch('');
+    setActiveFilter('active');
+    setCategoryFilter(ALL_CATEGORIES);
+  };
+
   const toggleMut = useMutation({
     mutationFn: ({ id, is_active }: { id: string; is_active: boolean }) =>
       updateRule(id, { is_active }),
@@ -197,34 +209,40 @@ export function RulesPage() {
 
   return (
     <div className="min-h-0">
-      <header className="border-b border-navy-100 bg-white px-6 pb-5 pt-7 md:px-8">
-        <div className="text-caption text-gray-500">
-          <span>Categorization</span>
-          <span className="mx-1.5 text-gray-300">/</span>
-          <span className="font-semibold text-navy-700">Rules</span>
-        </div>
-        <div className="mt-2 flex flex-wrap items-end justify-between gap-4">
-          <p className="max-w-2xl text-[14px] text-gray-600">
-            Drag rows to change priority — rules apply top to bottom.
-          </p>
-          <div className="flex flex-wrap gap-2">
-            <Button variant="secondary" size="sm" onClick={() => setCreating(true)}>
-              + New rule
-            </Button>
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={() => navigate('/rules/run')}
-              className="inline-flex items-center gap-1.5"
-            >
-              <IconPlay className="text-white" />
-              Run rules
-            </Button>
+      {/* Page header */}
+      <div className="mb-3 flex items-end justify-between gap-3 px-6 pt-7 md:px-8">
+        <div className="min-w-0">
+          <div className="text-caption text-gray-500">
+            <span>Categorization</span>
+            <span className="mx-1.5 text-gray-300">/</span>
+            <span className="font-semibold text-navy-700">Rules</span>
           </div>
+          <p className="mt-1 text-sm text-gray-600">
+            Drag rows to change priority — rules apply top to bottom.
+            {activeFilterCount > 0 && (
+              <span className="ml-2 inline-flex items-center rounded-full bg-navy-100 px-2 py-0.5 text-[10px] font-bold text-navy-800">
+                Filtered
+              </span>
+            )}
+          </p>
         </div>
-      </header>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="secondary" size="sm" onClick={() => setCreating(true)}>
+            + New rule
+          </Button>
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={() => navigate('/rules/run')}
+            className="inline-flex items-center gap-1.5"
+          >
+            <IconPlay className="text-white" />
+            Run rules
+          </Button>
+        </div>
+      </div>
 
-      <div className="mx-auto max-w-4xl px-6 py-6 md:px-8">
+      <div className="mx-auto max-w-4xl px-6 py-4 md:px-8">
         {loading && <StatusPanel kind="loading" message="Loading rules…" />}
         {!loading && err && (
           <StatusPanel kind="error" message="Could not load rules." detail={(err as Error).message} />
@@ -232,6 +250,7 @@ export function RulesPage() {
 
         {!loading && !err && schemeId && household && (
           <>
+            {/* Stat cards */}
             <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
               <StatCard
                 label="Active rules"
@@ -259,54 +278,82 @@ export function RulesPage() {
               />
             </div>
 
-            <div className="flex flex-col overflow-hidden rounded-lg border border-navy-100 bg-white shadow-sm">
-              <div className="flex flex-wrap items-center gap-2 border-b border-navy-100 px-4 py-2.5">
-                <div className="relative max-w-sm min-w-[12rem] flex-1">
-                  <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400">
-                    <IconSearch />
-                  </span>
-                  <input
-                    type="search"
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    placeholder="Search rules…"
-                    className="h-8 w-full rounded-md border border-gray-200 bg-gray-50 py-1 pl-8 pr-3 text-sm focus:border-navy-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-navy-500/20"
-                  />
-                </div>
-                <div className="inline-flex rounded-md bg-gray-100 p-0.5 text-[11px] font-semibold">
-                  {(['active', 'all', 'disabled'] as const).map((k) => (
-                    <button
-                      key={k}
-                      type="button"
-                      onClick={() => setActiveFilter(k)}
-                      className={
-                        'rounded-[5px] px-2.5 py-1 capitalize transition-colors ' +
-                        (activeFilter === k
-                          ? 'bg-white text-navy-800 shadow-sm'
-                          : 'text-gray-600 hover:text-navy-800')
-                      }
-                    >
-                      {k}
-                    </button>
-                  ))}
-                </div>
-                <select
-                  value={categoryFilter}
-                  onChange={(e) => setCategoryFilter(e.target.value)}
-                  className="h-8 rounded-md border border-gray-200 bg-gray-50 px-2 text-[12px] font-medium text-navy-800 focus:border-navy-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-navy-500/20"
-                >
-                  <option value={ALL_CATEGORIES}>All categories</option>
-                  {assignedCategoryIds.map((catId) => (
-                    <option key={catId} value={catId}>
-                      {categoryNameById(catId)}
-                    </option>
-                  ))}
-                </select>
-                <span className="ml-auto font-mono text-[11px] tabular-nums text-gray-500">
-                  {filteredRules.length} of {orderedRules.length}
+            {/* Slim toolbar — mirrors V4 transactions style */}
+            <div className="mb-2 flex flex-wrap items-center gap-2">
+              <div className="relative w-[280px] max-w-full">
+                <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400">
+                  <IconSearch />
                 </span>
+                <input
+                  type="search"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search rules…"
+                  className="w-full rounded-md border border-navy-200 bg-white py-1.5 pl-8 pr-2 text-sm focus:border-navy-400 focus:outline-none focus:ring-2 focus:ring-navy-200"
+                />
               </div>
 
+              <ColumnFilterPopover label="Status" active={activeFilter !== 'active'}>
+                <div className="w-[160px] space-y-0.5">
+                  {(['active', 'all', 'disabled'] as const).map((k) => (
+                    <label key={k} className="flex cursor-pointer items-center gap-2 rounded px-1 py-1 text-sm capitalize hover:bg-navy-50">
+                      <input
+                        type="radio"
+                        name="status-filter"
+                        checked={activeFilter === k}
+                        onChange={() => setActiveFilter(k)}
+                        className="h-3.5 w-3.5 border-gray-300 accent-navy-700"
+                      />
+                      <span className="text-navy-800">{k}</span>
+                    </label>
+                  ))}
+                </div>
+              </ColumnFilterPopover>
+
+              <ColumnFilterPopover
+                label="Category"
+                active={categoryFilter !== ALL_CATEGORIES}
+                count={categoryFilter !== ALL_CATEGORIES ? 1 : undefined}
+              >
+                <div className="max-h-[220px] w-[220px] space-y-0.5 overflow-y-auto">
+                  <label className="flex cursor-pointer items-center gap-2 rounded px-1 py-1 text-sm hover:bg-navy-50">
+                    <input
+                      type="radio"
+                      name="cat-filter"
+                      checked={categoryFilter === ALL_CATEGORIES}
+                      onChange={() => setCategoryFilter(ALL_CATEGORIES)}
+                      className="h-3.5 w-3.5 border-gray-300 accent-navy-700"
+                    />
+                    <span className="text-navy-800">All categories</span>
+                  </label>
+                  {assignedCategoryIds.map((catId) => (
+                    <label key={catId} className="flex cursor-pointer items-center gap-2 rounded px-1 py-1 text-sm hover:bg-navy-50">
+                      <input
+                        type="radio"
+                        name="cat-filter"
+                        checked={categoryFilter === catId}
+                        onChange={() => setCategoryFilter(catId)}
+                        className="h-3.5 w-3.5 border-gray-300 accent-navy-700"
+                      />
+                      <span className="flex-1 truncate text-navy-800">{categoryNameById(catId)}</span>
+                    </label>
+                  ))}
+                </div>
+              </ColumnFilterPopover>
+
+              <span className="ml-auto font-mono text-[11px] tabular-nums text-gray-500">
+                {filteredRules.length} of {orderedRules.length}
+              </span>
+
+              {activeFilterCount > 0 && (
+                <Button variant="secondary" size="sm" onClick={clearAllFilters}>
+                  Clear filters ({activeFilterCount})
+                </Button>
+              )}
+            </div>
+
+            {/* Rules table */}
+            <div className="flex flex-col overflow-hidden rounded-lg border border-navy-100 bg-white shadow-sm">
               {creating && (
                 <div className="border-b border-navy-100 bg-gold-100/30 px-4 py-3">
                   <RuleEditor
@@ -329,6 +376,15 @@ export function RulesPage() {
                     <p className="mt-2 text-[13px] text-gray-600">
                       Try clearing your search, or create a new rule.
                     </p>
+                    {activeFilterCount > 0 && (
+                      <button
+                        type="button"
+                        className="mt-2 text-sm font-semibold text-navy-700 underline"
+                        onClick={clearAllFilters}
+                      >
+                        Clear all filters
+                      </button>
+                    )}
                     <Button variant="primary" size="sm" className="mt-4" onClick={() => setCreating(true)}>
                       + Create rule
                     </Button>
@@ -378,6 +434,7 @@ export function RulesPage() {
                 )}
               </div>
 
+              {/* Bulk action bar */}
               {selectedIds.size > 0 && (
                 <div className="flex flex-wrap items-center justify-between gap-2 border-t border-navy-100 bg-navy-50/60 px-4 py-2.5">
                   <span className="text-[12px] font-semibold text-navy-800">
@@ -406,6 +463,7 @@ export function RulesPage() {
               )}
             </div>
 
+            {/* Run rules CTA */}
             <div className="mt-6 flex flex-wrap items-start gap-3 rounded-lg border border-navy-100 bg-navy-50 px-4 py-3">
               <IconBolt className="mt-0.5 h-5 w-5 shrink-0 text-gold-500" />
               <div className="min-w-0 flex-1">

@@ -368,15 +368,14 @@ export function DashboardPage() {
       cash: 0,
     };
 
+    const allocatedItemIds = new Set(allocs.map((a) => a.item_id));
+
     for (const item of items) {
       if (!item.is_active || item.type !== 'asset') continue;
+      if (!allocatedItemIds.has(item.id)) continue;
       const balance = eff.get(item.id);
       if (balance == null) continue;
       const itemAllocs = allocs.filter((a) => a.item_id === item.id);
-      if (itemAllocs.length === 0) {
-        totals.cash += balance;
-        continue;
-      }
       for (const a of itemAllocs) {
         totals[a.category] += balance * (a.percentage / 100);
       }

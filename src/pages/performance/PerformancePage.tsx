@@ -589,11 +589,18 @@ function RatesTab({
   }, [rebalances]);
 
   // Set of month ISOs that have any rebalance (for column header highlighting)
-  const rebalancedMonths = useMemo(() => {
-    const s = new Set<string>();
-    for (const rb of rebalances) s.add(rb.month);
-    return s;
-  }, [rebalances]);
+  // Maps month ISO → list of account names rebalanced that month
+  const rebalancedMonthNames = useMemo(() => {
+    const m = new Map<string, string[]>();
+    for (const rb of rebalances) {
+      const row = rows.find((r) => r.perfAcct.id === rb.account_id);
+      const name = row?.name ?? 'Unknown';
+      const existing = m.get(rb.month);
+      if (existing) existing.push(name);
+      else m.set(rb.month, [name]);
+    }
+    return m;
+  }, [rebalances, rows]);
 
   // Determine if any Fama-French factor is missing a rate for the selected month
   const selectedMonthIso = `${period.year}-${String(period.month).padStart(2, '0')}-01`;
@@ -652,7 +659,8 @@ function RatesTab({
               </div>
               {months.map((p) => {
                 const monthIso = `${p.year}-${String(p.month).padStart(2, '0')}-01`;
-                const hasRebalance = rebalancedMonths.has(monthIso);
+                const rebalancedAccts = rebalancedMonthNames.get(monthIso);
+                const hasRebalance = !!rebalancedAccts;
                 return (
                   <div
                     key={periodKey(p)}
@@ -661,7 +669,7 @@ function RatesTab({
                         ? 'bg-indigo-50 text-indigo-700'
                         : 'text-navy-700'
                     }`}
-                    title={hasRebalance ? 'Rebalance occurred this month' : undefined}
+                    title={hasRebalance ? `Rebalanced: ${rebalancedAccts.join(', ')}` : undefined}
                   >
                     <span className="flex items-center justify-end gap-1">
                       {hasRebalance && (
@@ -700,7 +708,7 @@ function RatesTab({
                     const monthIso = `${p.year}-${String(p.month).padStart(2, '0')}-01`;
                     const val = rateLookup.get(`${perfAcct.id}|${monthIso}`);
                     const isRebalanced = rebalanceKeys.has(`${perfAcct.id}|${monthIso}`);
-                    const monthHasAnyRebalance = rebalancedMonths.has(monthIso);
+                    const monthHasAnyRebalance = rebalancedMonthNames.has(monthIso);
                     return (
                       <RateCell
                         key={periodKey(p)}

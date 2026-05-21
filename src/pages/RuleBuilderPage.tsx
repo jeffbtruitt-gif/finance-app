@@ -10,29 +10,13 @@ import { ConditionEditor } from '../features/rules/ConditionEditor';
 import type { RuleCondition, MatchableTransaction } from '../types/phase2';
 import { Button, Card } from '@/components/ds';
 import { StatusPanel } from '@/components/StatusPanel';
+import { ColumnFilterPopover } from '@/pages/transactions/ColumnFilterPopover';
 import { formatDate } from '@/lib/date';
 import { formatMoney } from '@/lib/money';
 import {
   RULE_BUILDER_FROM_IDS_KEY,
   type RuleBuilderLocationState,
 } from '@/lib/ruleBuilderNavigation';
-
-/**
- * Rule builder page.
- *
- * Routes:
- *   /rules/new                        → blank
- *   /rules/new?from=tx1,tx2,tx3       → pre-fill (small selections only; URLs are length-limited)
- *   navigate('/rules/new', { state: { ruleBuilderFromIds } }) → pre-fill for large selections
- *   /rules/:id                        → edit existing
- *
- * Pre-fill from selection:
- *   - If the selection shares a description prefix → starts_with that prefix
- *   - Else if they share a substring → contains that substring
- *   - Else if they share an account → account is X
- *   - All amounts within ±$1 → amount between [min-1, max+1]
- *   This is a heuristic kick-start; the user always reviews before saving.
- */
 
 export function RuleBuilderPage() {
   const navigate = useNavigate();
@@ -49,7 +33,6 @@ export function RuleBuilderPage() {
   const fromSelection =
     stateIds && stateIds.length > 0 ? stateIds : fromQuery;
 
-  // Default scheme
   const schemeQuery = useQuery({
     queryKey: defaultSchemeQueryKey(household?.id),
     enabled: !!household?.id,
@@ -72,13 +55,10 @@ export function RuleBuilderPage() {
     },
   });
 
-  // For pre-fill and live-preview match count, load all transactions
-  // (simple approach; for very large datasets we'd pre-aggregate server-side)
   const allTxQuery = useQuery({
     queryKey: ['rule-builder-tx', household?.id],
     enabled: !!household?.id,
     queryFn: async () => {
-      // Two-step lookup to avoid the Supabase joined-table syntax
       const [txRes, acctRes] = await Promise.all([
         supabase
           .from('tf_transactions')
@@ -110,16 +90,15 @@ export function RuleBuilderPage() {
     queryFn: () => getRule(editId!),
   });
 
-  // Form state
   const [name, setName] = useState('');
   const [conditions, setConditions] = useState<RuleCondition[]>([]);
   const [actionCategoryId, setActionCategoryId] = useState('');
   const [matchPreviewFilter, setMatchPreviewFilter] = useState<'all' | 'flagged'>('all');
+  const [previewSearch, setPreviewSearch] = useState('');
 
   const hydratedEditIdRef = useRef<string | null>(null);
   const seededFromKeyRef = useRef<string | null>(null);
 
-  // Leaving edit mode → blank form (new rule); selection pre-fill runs in next effect.
   useEffect(() => {
     if (editId) return;
     hydratedEditIdRef.current = null;
@@ -129,7 +108,6 @@ export function RuleBuilderPage() {
     setActionCategoryId('');
   }, [editId]);
 
-  // Load existing rule into the form once per editId.
   useEffect(() => {
     if (!editId || !ruleQuery.data || ruleQuery.data.id !== editId) return;
     if (hydratedEditIdRef.current === editId) return;
@@ -139,7 +117,6 @@ export function RuleBuilderPage() {
     setActionCategoryId(ruleQuery.data.action_category_id);
   }, [editId, ruleQuery.data]);
 
-  // New rule from transaction selection (heuristic pre-fill), once per selection key (not on tx refetch).
   const fromKey = fromSelection.join(',');
   useEffect(() => {
     if (editId || fromSelection.length === 0 || !allTxQuery.data) return;
@@ -152,7 +129,6 @@ export function RuleBuilderPage() {
     setName(seed.suggestedName);
   }, [editId, allTxQuery.data, fromKey]);
 
-  // Live match count + preview rows
   const matchingTransactions = useMemo(() => {
     if (!allTxQuery.data || conditions.length === 0) return [];
     return listMatchingTransactions({ conditions }, allTxQuery.data);
@@ -166,11 +142,19 @@ export function RuleBuilderPage() {
   );
 
   const previewRows = useMemo(() => {
+    let rows = matchingTransactions;
     if (matchPreviewFilter === 'flagged') {
-      return matchingTransactions.filter((t) => t.flag_for_review);
+      rows = rows.filter((t) => t.flag_for_review);
     }
-    return matchingTransactions;
-  }, [matchingTransactions, matchPreviewFilter]);
+    const q = previewSearch.trim().toLowerCase();
+    if (q) {
+      rows = rows.filter((t) =>
+        t.description.toLowerCase().includes(q) ||
+        (t.account_name ?? '').toLowerCase().includes(q)
+      );
+    }
+    return rows;
+  }, [matchingTransactions, matchPreviewFilter, previewSearch]);
 
   useEffect(() => {
     if (matchPreviewFilter === 'flagged' && flaggedInMatches === 0 && matchCount > 0) {
@@ -286,6 +270,7 @@ export function RuleBuilderPage() {
           </select>
         </div>
 
+        {/* Live preview with V4 inline-filter style */}
         <div className="space-y-3 rounded-md border border-info/30 bg-info-soft px-3 py-3 text-sm text-navy-800">
           <div>
             <strong>Live preview:</strong> this rule would match{' '}
@@ -300,89 +285,115 @@ export function RuleBuilderPage() {
           </div>
           {conditions.length > 0 && matchCount > 0 && (
             <>
+              {/* Preview toolbar */}
               <div className="flex flex-wrap items-center gap-2">
-                <span className="text-label uppercase tracking-wider text-gray-600">
-                  Show
-                </span>
-                <div className="inline-flex rounded-md bg-white/80 p-0.5 text-[11px] font-semibold shadow-sm ring-1 ring-navy-100">
-                  {(
-                    [
-                      ['all', `All matches (${matchCount})`],
-                      ['flagged', `Flagged for review (${flaggedInMatches})`],
-                    ] as const
-                  ).map(([k, label]) => (
-                    <button
-                      key={k}
-                      type="button"
-                      disabled={k === 'flagged' && flaggedInMatches === 0}
-                      title={
-                        k === 'flagged' && flaggedInMatches === 0
-                          ? 'None of the matching transactions are flagged for review'
-                          : undefined
-                      }
-                      onClick={() => setMatchPreviewFilter(k)}
-                      className={
-                        'rounded-[5px] px-2 py-1 transition-colors ' +
-                        (matchPreviewFilter === k
-                          ? 'bg-white text-navy-800 shadow-sm ring-1 ring-navy-200'
-                          : 'text-gray-600 hover:text-navy-800 disabled:cursor-not-allowed disabled:opacity-45')
-                      }
-                    >
-                      {label}
-                    </button>
-                  ))}
+                <div className="relative w-[220px] max-w-full">
+                  <svg viewBox="0 0 16 16" className="pointer-events-none absolute left-2 top-1/2 h-3 w-3 -translate-y-1/2 text-gray-400" fill="none" stroke="currentColor" strokeWidth="1.5">
+                    <circle cx="7" cy="7" r="5" /><path d="m11 11 3 3" strokeLinecap="round" />
+                  </svg>
+                  <input
+                    value={previewSearch}
+                    onChange={(e) => setPreviewSearch(e.target.value)}
+                    placeholder="Search matches…"
+                    className="w-full rounded-md border border-navy-200 bg-white py-1 pl-7 pr-2 text-xs focus:border-navy-400 focus:outline-none focus:ring-2 focus:ring-navy-200"
+                  />
                 </div>
+
+                <ColumnFilterPopover label="View" active={matchPreviewFilter !== 'all'}>
+                  <div className="w-[200px] space-y-0.5">
+                    {(
+                      [
+                        ['all', `All matches (${matchCount})`],
+                        ['flagged', `Flagged for review (${flaggedInMatches})`],
+                      ] as const
+                    ).map(([k, label]) => (
+                      <label key={k} className="flex cursor-pointer items-center gap-2 rounded px-1 py-1 text-sm hover:bg-navy-50">
+                        <input
+                          type="radio"
+                          name="preview-filter"
+                          checked={matchPreviewFilter === k}
+                          disabled={k === 'flagged' && flaggedInMatches === 0}
+                          onChange={() => setMatchPreviewFilter(k)}
+                          className="h-3.5 w-3.5 border-gray-300 accent-navy-700"
+                        />
+                        <span className="text-navy-800">{label}</span>
+                      </label>
+                    ))}
+                  </div>
+                </ColumnFilterPopover>
+
+                <span className="ml-auto font-mono text-[10px] tabular-nums text-gray-500">
+                  {previewRows.length} of {matchCount}
+                </span>
               </div>
+
+              {/* Preview table */}
               <div className="max-h-[min(40vh,320px)] overflow-auto rounded-md border border-navy-100 bg-white">
                 <table className="w-full text-left text-[12px] text-navy-900">
                   <thead className="sticky top-0 z-[1] border-b border-navy-100 bg-gray-50">
                     <tr>
-                      <th className="px-2 py-2 font-medium text-label uppercase tracking-wider text-gray-500">
+                      <th className="whitespace-nowrap px-2 py-2 text-label uppercase text-gray-500">
                         Date
                       </th>
-                      <th className="px-2 py-2 font-medium text-label uppercase tracking-wider text-gray-500">
+                      <th className="whitespace-nowrap px-2 py-2 text-label uppercase text-gray-500">
                         Description
                       </th>
-                      <th className="px-2 py-2 font-medium text-label uppercase tracking-wider text-gray-500">
+                      <th className="whitespace-nowrap px-2 py-2 text-label uppercase text-gray-500">
                         Account
                       </th>
-                      <th className="px-2 py-2 text-right font-medium text-label uppercase tracking-wider text-gray-500">
+                      <th className="whitespace-nowrap px-2 py-2 text-right text-label uppercase text-gray-500">
                         Amount
                       </th>
                     </tr>
                   </thead>
                   <tbody>
-                    {previewRows.map((row) => (
-                      <tr
-                        key={row.id}
-                        className={
-                          row.flag_for_review ? 'bg-gold-100/70' : 'hover:bg-gray-50'
-                        }
-                      >
-                        <td className="whitespace-nowrap px-2 py-1.5">
-                          <span className="inline-flex items-center gap-1">
-                            {row.flag_for_review ? (
-                              <span
-                                className="h-1.5 w-1.5 shrink-0 rounded-full bg-gold-500"
-                                title="Flagged for review"
-                              />
-                            ) : null}
-                            <span className="num-tab text-gray-700">
-                              {row.date ? formatDate(row.date) : '—'}
-                            </span>
-                          </span>
-                        </td>
-                        <td className="max-w-[200px] truncate px-2 py-1.5 md:max-w-none">
-                          {row.description}
-                        </td>
-                        <td className="max-w-[120px] truncate px-2 py-1.5 text-gray-700">
-                          {row.account_name || '—'}
-                        </td>
-                        <td className="num-tab whitespace-nowrap px-2 py-1.5 text-right">
-                          {formatMoney(row.amount)}
+                    {previewRows.length === 0 ? (
+                      <tr>
+                        <td colSpan={4} className="px-2 py-6 text-center text-gray-500">
+                          No matches found.
+                          {previewSearch && (
+                            <button type="button" className="ml-2 font-semibold text-navy-700 underline" onClick={() => setPreviewSearch('')}>
+                              Clear search
+                            </button>
+                          )}
                         </td>
                       </tr>
-                    ))}
+                    ) : (
+                      previewRows.map((row) => {
+                        const amtCls = row.amount < 0 ? 'text-pos' : 'text-navy-900';
+                        return (
+                          <tr
+                            key={row.id}
+                            className={`border-b border-navy-100 last:border-0 ${
+                              row.flag_for_review ? 'bg-gold-100/70' : 'hover:bg-navy-50/40'
+                            }`}
+                          >
+                            <td className="whitespace-nowrap px-2 py-1.5">
+                              <span className="inline-flex items-center gap-1">
+                                {row.flag_for_review ? (
+                                  <span
+                                    className="h-1.5 w-1.5 shrink-0 rounded-full bg-gold-500"
+                                    title="Flagged for review"
+                                  />
+                                ) : null}
+                                <span className="num-tab text-gray-700">
+                                  {row.date ? formatDate(row.date) : '—'}
+                                </span>
+                              </span>
+                            </td>
+                            <td className="max-w-[200px] truncate px-2 py-1.5 font-semibold text-navy-900 md:max-w-none">
+                              {row.description}
+                            </td>
+                            <td className="max-w-[120px] truncate px-2 py-1.5 text-gray-700">
+                              {row.account_name || '—'}
+                            </td>
+                            <td className={`num-tab whitespace-nowrap px-2 py-1.5 text-right font-semibold tabular-nums ${amtCls}`}>
+                              {formatMoney(row.amount)}
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -419,7 +430,6 @@ function seedFromSelection(
   const descs = selected.map(t => t.description);
   let suggestedName = 'New rule';
 
-  // One row: never use the full line as starts_with (matches exactly one txn).
   if (selected.length === 1) {
     const tok = longestMeaningfulToken(descs[0]);
     if (tok) {
@@ -446,7 +456,6 @@ function seedFromSelection(
     }
   }
 
-  // Same account?
   const accounts = new Set(selected.map(t => t.account_name));
   if (accounts.size === 1) {
     const onlyAccount = [...accounts][0];
@@ -455,7 +464,6 @@ function seedFromSelection(
     }
   }
 
-  // Tight amount range? (max - min < $2 → between min-1, max+1)
   const amounts = selected.map(t => t.amount);
   const min = Math.min(...amounts);
   const max = Math.max(...amounts);
@@ -467,7 +475,6 @@ function seedFromSelection(
   return { conditions, suggestedName };
 }
 
-/** Longest alphanumeric token (≥4 chars); better default than whole-description starts_with. */
 function longestMeaningfulToken(description: string): string | null {
   const tokens = description
     .toLowerCase()
@@ -490,7 +497,6 @@ function longestCommonPrefix(strs: string[]): string {
 }
 
 function mostCommonToken(strs: string[]): string | null {
-  // Tokenize and find words (>= 4 chars) that appear in most strings
   const counts = new Map<string, number>();
   for (const s of strs) {
     const tokens = new Set(
