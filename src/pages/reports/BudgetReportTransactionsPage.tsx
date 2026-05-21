@@ -578,10 +578,10 @@ export function BudgetReportTransactionsPage() {
                   <td className="px-2 py-1.5"></td>
                   <td className="px-2 py-1.5"></td>
                   <td className="px-2 py-1.5"></td>
-                  <td className="px-2 py-1.5 text-gray-700 num-tab">
+                  <td className="whitespace-nowrap px-2 py-1.5 text-gray-700 num-tab">
                     in <b className="text-pos">{fmtUsd(-stats.inSum, { decimals: 2 })}</b> · out <b>{fmtUsd(stats.outSum, { decimals: 2 })}</b>
                   </td>
-                  <td className={`num-tab px-2 py-1.5 text-right font-bold ${moneyClass(stats.net)}`}>{fmtUsd(stats.net, { decimals: 2 })}</td>
+                  <td className={`whitespace-nowrap num-tab px-2 py-1.5 text-right font-bold ${moneyClass(stats.net)}`}>{fmtUsd(stats.net, { decimals: 2 })}</td>
                 </tr>
               </tfoot>
             </table>
