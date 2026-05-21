@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 
 interface Props {
   label: string;
@@ -12,26 +12,52 @@ interface Props {
 
 export function ColumnFilterPopover({ label, active = false, count, align = 'left', children }: Props) {
   const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+
+  const reposition = useCallback(() => {
+    const wrap = wrapRef.current;
+    if (!wrap) return;
+    const rect = wrap.getBoundingClientRect();
+    if (align === 'right') {
+      setPos({ top: rect.bottom + 4, left: rect.right });
+    } else {
+      setPos({ top: rect.bottom + 4, left: rect.left });
+    }
+  }, [align]);
+
+  useLayoutEffect(() => {
+    if (!open) return;
+    reposition();
+  }, [open, reposition]);
 
   useEffect(() => {
     if (!open) return;
     function onDoc(e: MouseEvent) {
-      if (!ref.current?.contains(e.target as Node)) setOpen(false);
+      const target = e.target as Node;
+      if (wrapRef.current?.contains(target)) return;
+      if (panelRef.current?.contains(target)) return;
+      setOpen(false);
     }
     function onEsc(e: KeyboardEvent) {
       if (e.key === 'Escape') setOpen(false);
     }
+    function onScroll() {
+      reposition();
+    }
     window.addEventListener('mousedown', onDoc);
     window.addEventListener('keydown', onEsc);
+    window.addEventListener('scroll', onScroll, true);
     return () => {
       window.removeEventListener('mousedown', onDoc);
       window.removeEventListener('keydown', onEsc);
+      window.removeEventListener('scroll', onScroll, true);
     };
-  }, [open]);
+  }, [open, reposition]);
 
   return (
-    <div ref={ref} className="group relative inline-flex items-center gap-1">
+    <div ref={wrapRef} className="group relative inline-flex items-center gap-1">
       <span>{label}</span>
       <button
         type="button"
@@ -54,13 +80,17 @@ export function ColumnFilterPopover({ label, active = false, count, align = 'lef
       {active && count !== undefined && count > 0 && (
         <span className="rounded-full bg-navy-100 px-1.5 py-0 text-[9px] font-bold text-navy-800 num-tab">{count}</span>
       )}
-      {open && (
+      {open && pos && (
         <div
+          ref={panelRef}
           onClick={(e) => e.stopPropagation()}
-          className={
-            'absolute top-full z-30 mt-1 min-w-[220px] rounded-lg border border-navy-100 bg-white p-2 text-left text-sm normal-case tracking-normal text-navy-900 shadow-lg ' +
-            (align === 'right' ? 'right-0' : 'left-0')
-          }
+          style={{
+            position: 'fixed',
+            top: pos.top,
+            ...(align === 'right' ? { right: window.innerWidth - pos.left } : { left: pos.left }),
+            zIndex: 50,
+          }}
+          className="min-w-[220px] rounded-lg border border-navy-100 bg-white p-2 text-left text-sm normal-case tracking-normal text-navy-900 shadow-lg"
         >
           {children}
         </div>

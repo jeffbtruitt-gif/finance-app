@@ -282,10 +282,18 @@ export function BudgetReportTransactionsPage() {
       )}
 
       {txQ.data && (
-        <Card padded={false} className="min-w-0 overflow-hidden">
+        <Card padded={false} className="min-w-0">
           <div className="max-h-[820px] overflow-auto">
-            <table className="w-full text-sm">
-              <thead className="sticky top-0 z-10 border-b border-navy-100 bg-gray-50">
+            <table className="w-full table-fixed text-sm">
+              <colgroup>
+                <col style={{ width: 100 }} />
+                <col />
+                <col style={{ width: 170 }} />
+                <col style={{ width: 160 }} />
+                <col style={{ width: 150 }} />
+                <col style={{ width: 120 }} />
+              </colgroup>
+              <thead className="sticky top-0 z-20 border-b border-navy-100 bg-gray-50">
                 <tr>
                   {/* Date */}
                   <th className="whitespace-nowrap px-2 py-2 text-left text-label uppercase text-gray-600">
@@ -368,7 +376,7 @@ export function BudgetReportTransactionsPage() {
                   </th>
 
                   {/* Account */}
-                  <th className="whitespace-nowrap px-2 py-2 text-left text-label uppercase text-gray-600" style={{ width: 170 }}>
+                  <th className="whitespace-nowrap px-2 py-2 text-left text-label uppercase text-gray-600">
                     <ColumnFilterPopover label="Account" active={accountFilter.length > 0} count={accountFilter.length}>
                       <div className="max-h-[220px] w-[220px] space-y-0.5 overflow-y-auto">
                         {accountOptions.map((a) => (
@@ -538,7 +546,7 @@ export function BudgetReportTransactionsPage() {
                       <td className="px-2 py-1.5 align-middle">
                         <span className="truncate font-semibold text-navy-900">{t.description}</span>
                       </td>
-                      <td className="px-2 py-1.5 align-middle" style={{ width: 170 }}>
+                      <td className="px-2 py-1.5 align-middle">
                         <div className="flex min-w-0 items-center gap-2">
                           <span
                             className="h-6 w-1 shrink-0 rounded-full"
