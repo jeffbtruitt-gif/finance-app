@@ -14,13 +14,13 @@ import { fmtUsd, moneyClass } from '@/lib/money';
 import { formatPeriod, periodEndIso, periodStartIso, yearStartIso } from '@/lib/period';
 import { formatDate } from '@/lib/date';
 import { StatusPanel } from '@/components/StatusPanel';
-import { Card, CategoryChip, RT } from '@/components/ds';
+import { Card, CategoryChip } from '@/components/ds';
 import { accountStripeHex } from '@/pages/transactions/txAccountColor';
 import { TransactionPropertiesDrawer } from '@/pages/transactions/TransactionPropertiesDrawer';
+import { ColumnFilterPopover } from '@/pages/transactions/ColumnFilterPopover';
 
 type RangeMode = 'all' | 'ytd' | 'month';
 
-/** Aligns with monthly report group drill matching (Rent aliases). */
 function transactionMatchesGroupKey(t: ReportShellTransaction, drillKey: string): boolean {
   const g = t.category_group;
   if (drillKey === '__uncategorized__') return !t.category_id;
@@ -131,13 +131,29 @@ export function BudgetReportTransactionsPage() {
     [filteredSorted],
   );
 
-  const selectCls =
-    'rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 focus:border-navy-500 focus:outline-none focus:ring-2 focus:ring-navy-200';
-  const fieldLabelCls =
-    'mb-1 block text-[11px] font-semibold uppercase tracking-wider text-gray-500';
+  const stats = useMemo(() => {
+    let inSum = 0, outSum = 0;
+    for (const t of filteredSorted) {
+      if (t.amount < 0) inSum += -t.amount;
+      else outSum += t.amount;
+    }
+    return { inSum, outSum, net: outSum - inSum };
+  }, [filteredSorted]);
+
+  const activeFilterCount =
+    (search.trim() ? 1 : 0) +
+    (categoryId ? 1 : 0) +
+    (groupKey ? 1 : 0) +
+    (rangeMode !== 'all' ? 1 : 0);
+
+  const clearAll = () => {
+    setSearch('');
+    setCategoryId('');
+    setGroupKey('');
+    setRangeMode('all');
+  };
 
   const periodLabel = formatPeriod(period);
-
   const rangeSummary =
     rangeMode === 'all'
       ? 'All time'
@@ -146,84 +162,52 @@ export function BudgetReportTransactionsPage() {
         : formatPeriod(period);
 
   return (
-    <div>
-      <p className="mb-4 text-sm text-gray-600">
-        Search and filter transactions. <strong>All</strong> loads your most recent transactions (up to
-        8,000). <strong>YTD</strong> is January through the month in the header. <strong>Month</strong>{' '}
-        is that month only. Sorted by largest amount first.
-      </p>
-
-      <Card className="mb-4">
-        <div className="flex flex-wrap items-end gap-4">
-          <div>
-            <label className={fieldLabelCls}>Range</label>
-            <div className="inline-flex overflow-hidden rounded-md border border-navy-200 text-sm">
-              {(['all', 'ytd', 'month'] as const).map((m) => (
-                <button
-                  key={m}
-                  type="button"
-                  onClick={() => setRangeMode(m)}
-                  className={`px-3 py-1.5 font-medium transition-colors ${
-                    rangeMode === m
-                      ? 'bg-navy-800 text-white'
-                      : 'bg-white text-navy-700 hover:bg-navy-50'
-                  }`}
-                >
-                  {m === 'all' ? 'All' : m === 'ytd' ? 'YTD' : 'Month'}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="min-w-[12rem] flex-1 basis-[14rem]">
-            <label className={fieldLabelCls} htmlFor="br-tx-search">
-              Search
-            </label>
-            <input
-              id="br-tx-search"
-              type="search"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Description, account, or category…"
-              autoComplete="off"
-              className="w-full rounded-md border border-navy-200 px-3 py-2 text-sm placeholder:text-gray-400 focus:border-navy-400 focus:outline-none focus:ring-2 focus:ring-navy-300"
-            />
-          </div>
-
-          <div>
-            <label className={fieldLabelCls}>Category</label>
-            <select
-              value={categoryId}
-              onChange={(e) => setCategoryId(e.target.value)}
-              className={selectCls}
-            >
-              <option value="">All categories</option>
-              {(categoriesQ.data ?? []).map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.group_name ? `${c.group_name} · ` : ''}
-                  {c.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className={fieldLabelCls}>Group</label>
-            <select
-              value={groupKey}
-              onChange={(e) => setGroupKey(e.target.value)}
-              className={selectCls}
-            >
-              <option value="">All groups</option>
-              {groupOptions.map(({ key, label }) => (
-                <option key={key} value={key}>
-                  {label}
-                </option>
-              ))}
-            </select>
-          </div>
+    <div className="relative mx-auto max-w-[1600px]">
+      {/* Page header */}
+      <div className="mb-3 flex items-end justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-sm text-gray-600">
+            Click the funnel icon in any column header to filter. Sorted by largest amount first.
+            {activeFilterCount > 0 && (
+              <span className="ml-2 inline-flex items-center rounded-full bg-navy-100 px-2 py-0.5 text-[10px] font-bold text-navy-800">
+                Filtered
+              </span>
+            )}
+          </p>
         </div>
-      </Card>
+      </div>
+
+      {/* Slim toolbar */}
+      <div className="mb-2 flex flex-wrap items-center gap-2">
+        <div className="relative w-[340px] max-w-full">
+          <svg viewBox="0 0 16 16" className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <circle cx="7" cy="7" r="5" /><path d="m11 11 3 3" strokeLinecap="round" />
+          </svg>
+          <input
+            type="search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search descriptions, accounts, categories…"
+            className="w-full rounded-md border border-navy-200 bg-white py-1.5 pl-8 pr-2 text-sm focus:border-navy-400 focus:outline-none focus:ring-2 focus:ring-navy-200"
+          />
+        </div>
+
+        <span className="text-caption num-tab text-gray-600">
+          {rangeSummary} · {filteredSorted.length.toLocaleString()} of {(txQ.data?.length ?? 0).toLocaleString()} · net <b className={moneyClass(subtotal)}>{fmtUsd(subtotal, { decimals: 2 })}</b>
+        </span>
+
+        <div className="ml-auto flex items-center gap-2">
+          {activeFilterCount > 0 && (
+            <button
+              type="button"
+              onClick={clearAll}
+              className="rounded-md border border-navy-200 bg-white px-2.5 py-1 text-xs font-semibold text-navy-700 hover:bg-navy-50"
+            >
+              Clear filters ({activeFilterCount})
+            </button>
+          )}
+        </div>
+      </div>
 
       {txQ.isLoading && <StatusPanel kind="loading" message="Loading transactions…" />}
       {txQ.error && (
@@ -235,70 +219,176 @@ export function BudgetReportTransactionsPage() {
       )}
 
       {txQ.data && (
-        <Card padded={false}>
-          <div className="flex flex-wrap items-baseline justify-between gap-3 border-b border-navy-100 bg-navy-50/60 px-4 py-3">
-            <span className="text-caption text-gray-500">
-              {rangeSummary} · {filteredSorted.length} of {txQ.data.length} transactions
-            </span>
-            <div className={`text-base font-bold tabular-nums ${moneyClass(subtotal)}`}>
-              {fmtUsd(subtotal, { decimals: 2 })}
-            </div>
-          </div>
-
-          {filteredSorted.length === 0 ? (
-            <div className="p-6 text-sm text-gray-500">
-              No transactions match these filters.
-            </div>
-          ) : (
-            <table className={RT.table}>
-              <thead className={RT.head}>
+        <Card padded={false} className="min-w-0 overflow-hidden">
+          <div className="max-h-[820px] overflow-auto">
+            <table className="w-full text-sm">
+              <thead className="sticky top-0 z-10 border-b border-navy-100 bg-gray-50">
                 <tr>
-                  <th className={`${RT.th} ${RT.thLeft}`}>Date</th>
-                  <th className={`${RT.th} ${RT.thLeft}`}>Description</th>
-                  <th className={`${RT.th} ${RT.thLeft} w-[148px] max-w-[148px]`}>Account</th>
-                  <th className={`${RT.th} ${RT.thLeft}`}>Category</th>
-                  <th className={`${RT.th} ${RT.thLeft}`}>Group</th>
-                  <th className={`${RT.th} ${RT.thRight}`}>Amount</th>
+                  <th className="whitespace-nowrap px-2 py-2 text-left text-label uppercase text-gray-600">
+                    <ColumnFilterPopover label="Date" active={rangeMode !== 'all'}>
+                      <div className="w-[180px] space-y-0.5">
+                        {(['all', 'ytd', 'month'] as const).map((m) => (
+                          <label key={m} className="flex cursor-pointer items-center gap-2 rounded px-1 py-1.5 text-sm hover:bg-navy-50">
+                            <input
+                              type="radio"
+                              name="range-mode"
+                              checked={rangeMode === m}
+                              onChange={() => setRangeMode(m)}
+                              className="h-3.5 w-3.5 border-gray-300 accent-navy-700"
+                            />
+                            <span className="text-navy-800">
+                              {m === 'all' ? 'All time' : m === 'ytd' ? `YTD through ${periodLabel}` : periodLabel}
+                            </span>
+                          </label>
+                        ))}
+                      </div>
+                    </ColumnFilterPopover>
+                  </th>
+                  <th className="whitespace-nowrap px-2 py-2 text-left text-label uppercase text-gray-600">
+                    <ColumnFilterPopover label="Description" active={!!search.trim()}>
+                      <input
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                        placeholder="contains text…"
+                        className="w-full rounded-md border border-navy-200 px-2 py-1 text-sm focus:border-navy-400 focus:outline-none focus:ring-2 focus:ring-navy-200"
+                      />
+                    </ColumnFilterPopover>
+                  </th>
+                  <th className="whitespace-nowrap px-2 py-2 text-left text-label uppercase text-gray-600" style={{ width: 148, maxWidth: 148 }}>
+                    Account
+                  </th>
+                  <th className="whitespace-nowrap px-2 py-2 text-left text-label uppercase text-gray-600">
+                    <ColumnFilterPopover label="Category" active={!!categoryId} count={categoryId ? 1 : undefined}>
+                      <div className="max-h-[260px] w-[260px] space-y-0.5 overflow-y-auto">
+                        <label className="flex cursor-pointer items-center gap-2 rounded px-1 py-1 text-sm hover:bg-navy-50">
+                          <input
+                            type="radio"
+                            name="cat-filter"
+                            checked={!categoryId}
+                            onChange={() => setCategoryId('')}
+                            className="h-3.5 w-3.5 border-gray-300 accent-navy-700"
+                          />
+                          <span className="text-navy-800">All categories</span>
+                        </label>
+                        {(categoriesQ.data ?? []).map((c) => (
+                          <label key={c.id} className="flex cursor-pointer items-center gap-2 rounded px-1 py-1 text-sm hover:bg-navy-50">
+                            <input
+                              type="radio"
+                              name="cat-filter"
+                              checked={categoryId === c.id}
+                              onChange={() => setCategoryId(c.id)}
+                              className="h-3.5 w-3.5 border-gray-300 accent-navy-700"
+                            />
+                            <CategoryChip name={c.name} />
+                          </label>
+                        ))}
+                      </div>
+                    </ColumnFilterPopover>
+                  </th>
+                  <th className="whitespace-nowrap px-2 py-2 text-left text-label uppercase text-gray-600">
+                    <ColumnFilterPopover label="Group" active={!!groupKey} count={groupKey ? 1 : undefined}>
+                      <div className="max-h-[260px] w-[220px] space-y-0.5 overflow-y-auto">
+                        <label className="flex cursor-pointer items-center gap-2 rounded px-1 py-1 text-sm hover:bg-navy-50">
+                          <input
+                            type="radio"
+                            name="group-filter"
+                            checked={!groupKey}
+                            onChange={() => setGroupKey('')}
+                            className="h-3.5 w-3.5 border-gray-300 accent-navy-700"
+                          />
+                          <span className="text-navy-800">All groups</span>
+                        </label>
+                        {groupOptions.map(({ key, label }) => (
+                          <label key={key} className="flex cursor-pointer items-center gap-2 rounded px-1 py-1 text-sm hover:bg-navy-50">
+                            <input
+                              type="radio"
+                              name="group-filter"
+                              checked={groupKey === key}
+                              onChange={() => setGroupKey(key)}
+                              className="h-3.5 w-3.5 border-gray-300 accent-navy-700"
+                            />
+                            <span className="flex-1 truncate text-navy-800">{label}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </ColumnFilterPopover>
+                  </th>
+                  <th className="whitespace-nowrap px-2 py-2 text-right text-label uppercase text-gray-600">
+                    Amount
+                  </th>
                 </tr>
               </thead>
               <tbody>
-                {filteredSorted.map((t) => (
-                  <tr
-                    key={t.id}
-                    className={`${RT.detailRow} cursor-pointer hover:bg-navy-50/50`}
-                    onClick={() => setDetailTxnId(t.id)}
-                  >
-                    <td className={`${RT.cellLeft} tabular-nums text-gray-600`}>
-                      {formatDate(t.date)}
-                    </td>
-                    <td className={`${RT.cellLeft} font-medium text-navy-900`}>{t.description}</td>
-                    <td className={`${RT.cellLeft} w-[148px] max-w-[148px]`}>
-                      <div className="flex min-w-0 items-center gap-2">
-                        <span
-                          className="h-6 w-1 shrink-0 rounded-full"
-                          style={{ backgroundColor: accountStripeHex(t.account_id) }}
-                        />
-                        <span className="truncate text-gray-700">{t.account_name}</span>
-                      </div>
-                    </td>
-                    <td className={RT.cellLeft}>
-                      {t.category_id && t.category_name ? (
-                        <CategoryChip name={t.category_name} className="!text-[11px]" />
-                      ) : (
-                        <span className="text-gray-400">—</span>
+                {filteredSorted.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="px-2 py-10 text-center text-gray-500">
+                      No transactions match these filters.
+                      {activeFilterCount > 0 && (
+                        <button type="button" className="ml-2 font-semibold text-navy-700 underline" onClick={clearAll}>Clear all</button>
                       )}
                     </td>
-                    <td className={`${RT.cellLeft} text-gray-600`}>
-                      {t.category_group ?? '—'}
-                    </td>
-                    <td className={`${RT.cellRight} font-semibold tabular-nums ${moneyClass(t.amount)}`}>
-                      {fmtUsd(t.amount, { decimals: 2 })}
-                    </td>
                   </tr>
-                ))}
+                ) : (
+                  filteredSorted.map((t) => (
+                    <tr
+                      key={t.id}
+                      className="cursor-pointer border-b border-navy-100 transition-colors last:border-0 hover:bg-navy-50/40"
+                      onClick={() => setDetailTxnId(t.id)}
+                    >
+                      <td className="px-2 py-1.5 align-middle">
+                        <span className="num-tab text-[11px] leading-tight text-gray-700">
+                          {formatDate(t.date)}
+                        </span>
+                      </td>
+                      <td className="px-2 py-1.5 align-middle">
+                        <span className="truncate font-semibold text-navy-900">{t.description}</span>
+                      </td>
+                      <td className="px-2 py-1.5 align-middle" style={{ width: 148, maxWidth: 148 }}>
+                        <div className="flex min-w-0 items-center gap-2">
+                          <span
+                            className="h-6 w-1 shrink-0 rounded-full"
+                            style={{ backgroundColor: accountStripeHex(t.account_id) }}
+                          />
+                          <span className="truncate text-gray-700">{t.account_name}</span>
+                        </div>
+                      </td>
+                      <td className="px-2 py-1.5 align-middle">
+                        {t.category_id && t.category_name ? (
+                          <CategoryChip name={t.category_name} className="!text-[11px]" />
+                        ) : (
+                          <span className="text-gray-400">—</span>
+                        )}
+                      </td>
+                      <td className="px-2 py-1.5 align-middle text-gray-600">
+                        {t.category_group ?? '—'}
+                      </td>
+                      <td className={`px-2 py-1.5 align-middle text-right text-xs font-semibold tabular-nums num-tab ${moneyClass(t.amount)}`}>
+                        {fmtUsd(t.amount, { decimals: 2 })}
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
+              <tfoot className="sticky bottom-0 z-10 bg-gray-50">
+                <tr className="border-t border-navy-100 text-caption">
+                  <td className="px-2 py-1.5 text-label uppercase text-gray-500">Totals</td>
+                  <td className="px-2 py-1.5"></td>
+                  <td className="px-2 py-1.5"></td>
+                  <td className="px-2 py-1.5"></td>
+                  <td className="px-2 py-1.5 text-gray-700 num-tab">
+                    in <b className="text-pos">{fmtUsd(-stats.inSum, { decimals: 2 })}</b> · out <b>{fmtUsd(stats.outSum, { decimals: 2 })}</b>
+                  </td>
+                  <td className={`num-tab px-2 py-1.5 text-right font-bold ${moneyClass(stats.net)}`}>{fmtUsd(stats.net, { decimals: 2 })}</td>
+                </tr>
+              </tfoot>
             </table>
-          )}
+          </div>
+
+          <div className="flex items-center justify-between border-t border-navy-100 bg-gray-50 px-3 py-2 text-caption text-gray-600">
+            <span className="num-tab">
+              {rangeSummary} · {filteredSorted.length.toLocaleString()} of {(txQ.data?.length ?? 0).toLocaleString()} transactions
+            </span>
+          </div>
         </Card>
       )}
 
