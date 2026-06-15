@@ -633,7 +633,7 @@ export function ReforecastPage() {
                         return (
                           <div key={c.id} className={`group flex ${rowH} bg-white`}>
                             <div
-                              className={`sticky left-0 z-[3] ${colCat} shrink-0 border-b border-gray-100 border-r-2 border-gray-200 bg-white px-[18px] text-[13.5px] font-medium text-navy-800 group-hover:bg-navy-50/40`}
+                              className={`sticky left-0 z-[3] ${colCat} flex shrink-0 items-center border-b border-gray-100 border-r-2 border-gray-200 bg-white px-[18px] text-[13.5px] font-medium text-navy-800 group-hover:bg-navy-50/40`}
                             >
                               {c.name}
                             </div>
@@ -646,7 +646,7 @@ export function ReforecastPage() {
                               return (
                                 <div
                                   key={periodKey(p)}
-                                  className={`shrink-0 ${boundary ? 'border-l-2 border-l-gold-500' : ''}`}
+                                  className={`flex shrink-0 ${boundary ? 'border-l-2 border-l-gold-500' : ''}`}
                                 >
                                   <ReforecastMatrixCell
                                     catId={c.id}
@@ -1032,7 +1032,7 @@ function ReforecastMatrixCell({
     const a = actualDisplay ?? 0;
     return (
       <div
-        className={`${colMonthMin} flex shrink-0 items-center justify-end border-b border-r border-gray-100 bg-gray-50 px-3 tabular-nums ${cellFs} text-gray-600`}
+        className={`${colMonthMin} flex h-full min-h-[36px] shrink-0 items-center justify-end border-b border-r border-gray-100 bg-gray-50 px-3 tabular-nums ${cellFs} text-gray-600`}
       >
         {a === 0 ? (
           <span className="text-gray-300">{isYearlyRow ? '' : '—'}</span>
@@ -1045,7 +1045,7 @@ function ReforecastMatrixCell({
 
   if (!editing) {
     return (
-      <div className={`${colMonthMin} shrink-0 border-b border-r border-gray-100 bg-white ${cellFs}`}>
+      <div className={`${colMonthMin} flex h-full shrink-0 border-b border-r border-gray-100 bg-white ${cellFs}`}>
         <button
           type="button"
           data-rf-cell={`${catId}:${monthIdx}`}
@@ -1064,7 +1064,7 @@ function ReforecastMatrixCell({
   }
 
   return (
-    <div className={`${colMonthMin} shrink-0 border-b border-r border-gray-100 bg-white ${cellFs}`}>
+    <div className={`${colMonthMin} flex h-full shrink-0 border-b border-r border-gray-100 bg-white ${cellFs}`}>
       <input
         data-rf-cell={`${catId}:${monthIdx}`}
         autoFocus
