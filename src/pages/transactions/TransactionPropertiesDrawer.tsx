@@ -12,6 +12,7 @@ import type { CategoryOption } from '@/api/transactions';
 import type { TransactionRow } from '@/types';
 import { formatDate } from '@/lib/date';
 import { Button } from '@/components/ds';
+import { DescriptionSearchLink } from './DescriptionSearchLink';
 import { errorMessageFromUnknown } from '@/lib/errors';
 
 function Field({
@@ -209,7 +210,8 @@ export function TransactionPropertiesDrawer(props: {
       qc.invalidateQueries({ queryKey: ['reports-monthly-actuals'] });
       qc.invalidateQueries({ queryKey: ['dashboard-data'] });
       qc.invalidateQueries({ queryKey: ['transaction_categories'] });
-      void txnQ.refetch();
+      setDeleteConfirm(false);
+      onClose();
     },
   });
 
@@ -324,14 +326,24 @@ export function TransactionPropertiesDrawer(props: {
                 </Field>
               </div>
 
-              <Field label="Description">
-                <input
-                  type="text"
-                  className={inputCls}
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  aria-invalid={!descOk}
-                />
+              <Field
+                label="Description"
+                hint="Use the search icon to look up an unfamiliar merchant on Google."
+              >
+                <div className="relative">
+                  <input
+                    type="text"
+                    className={`${inputCls} pr-10`}
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    aria-invalid={!descOk}
+                  />
+                  <DescriptionSearchLink
+                    description={description}
+                    variant="inline"
+                    className="absolute right-2 top-1/2 h-7 w-7 -translate-y-1/2"
+                  />
+                </div>
               </Field>
 
               <Field label="Account">
