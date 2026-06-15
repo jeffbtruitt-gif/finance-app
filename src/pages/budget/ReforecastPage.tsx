@@ -601,7 +601,7 @@ export function ReforecastPage() {
                       className={`flex w-full border-b text-left ${isYearly ? 'border-gold-300 bg-gold-100' : 'border-navy-200 bg-navy-100'}`}
                     >
                       <div
-                        className={`sticky left-0 z-[4] ${colCat} shrink-0 border-r-2 px-[18px] py-2.5 text-[11.5px] font-bold uppercase tracking-wider ${
+                        className={`sticky left-0 z-[4] ${colCat} flex shrink-0 items-center border-r-2 px-[18px] py-2.5 text-[11.5px] font-bold uppercase tracking-wider ${
                           isYearly ? 'border-gold-300 text-gold-600' : 'border-navy-200 text-navy-700'
                         }`}
                       >
@@ -720,7 +720,7 @@ export function ReforecastPage() {
                         className={`flex ${rowH} border-b-2 ${isYearly ? 'border-gold-300 bg-gold-100' : 'border-navy-200 bg-navy-50'}`}
                       >
                         <div
-                          className={`sticky left-0 z-[3] ${colCat} shrink-0 border-r-2 px-[18px] text-[13px] font-bold ${isYearly ? 'border-gold-300 text-gold-600' : 'border-navy-200 text-navy-800'}`}
+                          className={`sticky left-0 z-[3] ${colCat} flex shrink-0 items-center border-r-2 px-[18px] text-[13px] font-bold ${isYearly ? 'border-gold-300 text-gold-600' : 'border-navy-200 text-navy-800'}`}
                         >
                           {group} subtotal
                         </div>
