@@ -633,7 +633,7 @@ export function ReforecastPage() {
                         return (
                           <div key={c.id} className={`group flex ${rowH} bg-white`}>
                             <div
-                              className={`sticky left-0 z-[3] ${colCat} flex shrink-0 items-center border-b border-gray-100 border-r-2 border-gray-200 bg-white px-[18px] text-[13.5px] font-medium text-navy-800 group-hover:bg-navy-50/40`}
+                              className={`sticky left-0 z-[3] ${colCat} flex shrink-0 items-center border-b border-gray-100 border-r-2 border-gray-200 bg-white px-[18px] text-[13.5px] font-medium text-navy-800 group-hover:bg-navy-50`}
                             >
                               {c.name}
                             </div>
