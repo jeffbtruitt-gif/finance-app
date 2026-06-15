@@ -644,10 +644,7 @@ export function ReforecastPage() {
                                 : getForecast(c.id, p.month);
                               const boundary = p.month === firstForecastMonth;
                               return (
-                                <div
-                                  key={periodKey(p)}
-                                  className={`flex shrink-0 ${boundary ? 'border-l-2 border-l-gold-500' : ''}`}
-                                >
+                                <div key={periodKey(p)} className="flex shrink-0">
                                   <ReforecastMatrixCell
                                     catId={c.id}
                                     monthIdx={mi}
@@ -661,6 +658,7 @@ export function ReforecastPage() {
                                     isYearlyRow={isYearly}
                                     cellFs={cellFs}
                                     colMonthMin={colMonthMin}
+                                    boundary={boundary}
                                     categoryName={c.name}
                                     onSave={(n) => setForecast(c.id, p.month, n)}
                                     onEnterDown={() => {
@@ -993,6 +991,7 @@ function ReforecastMatrixCell({
   isYearlyRow,
   cellFs,
   colMonthMin,
+  boundary,
   categoryName,
   onSave,
   onEnterDown,
@@ -1009,10 +1008,12 @@ function ReforecastMatrixCell({
   isYearlyRow: boolean;
   cellFs: string;
   colMonthMin: string;
+  boundary: boolean;
   categoryName: string;
   onSave: (n: number) => void;
   onEnterDown: () => void;
 }) {
+  const boundaryCls = boundary ? 'border-l-2 border-l-gold-500' : '';
   const [editing, setEditing] = useState(false);
   const [draftStr, setDraftStr] = useState('');
   const skipBlur = useRef(false);
@@ -1032,7 +1033,7 @@ function ReforecastMatrixCell({
     const a = actualDisplay ?? 0;
     return (
       <div
-        className={`${colMonthMin} flex h-full min-h-[36px] shrink-0 items-center justify-end border-b border-r border-gray-100 bg-gray-50 px-3 tabular-nums ${cellFs} text-gray-600`}
+        className={`${colMonthMin} flex h-full min-h-[36px] shrink-0 items-center justify-end border-b border-r border-gray-100 bg-gray-50 px-3 tabular-nums ${cellFs} text-gray-600 ${boundaryCls}`}
       >
         {a === 0 ? (
           <span className="text-gray-300">{isYearlyRow ? '' : '—'}</span>
@@ -1045,7 +1046,7 @@ function ReforecastMatrixCell({
 
   if (!editing) {
     return (
-      <div className={`${colMonthMin} flex h-full shrink-0 border-b border-r border-gray-100 bg-white ${cellFs}`}>
+      <div className={`${colMonthMin} flex h-full shrink-0 border-b border-r border-gray-100 bg-white ${cellFs} ${boundaryCls}`}>
         <button
           type="button"
           data-rf-cell={`${catId}:${monthIdx}`}
@@ -1064,7 +1065,7 @@ function ReforecastMatrixCell({
   }
 
   return (
-    <div className={`${colMonthMin} flex h-full shrink-0 border-b border-r border-gray-100 bg-white ${cellFs}`}>
+    <div className={`${colMonthMin} flex h-full shrink-0 border-b border-r border-gray-100 bg-white ${cellFs} ${boundaryCls}`}>
       <input
         data-rf-cell={`${catId}:${monthIdx}`}
         autoFocus
