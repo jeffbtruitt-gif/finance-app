@@ -527,7 +527,7 @@ export function ReforecastPage() {
             >
               <div className="sticky top-0 z-[5] flex border-b-2 border-navy-200 bg-navy-50">
                 <div
-                  className={`sticky left-0 z-[6] ${colCat} shrink-0 border-r-2 border-navy-200 px-[18px] py-3 text-[11px] font-bold uppercase tracking-wider text-navy-700`}
+                  className={`sticky left-0 z-[6] ${colCat} shrink-0 border-r-2 border-navy-200 bg-navy-50 px-[18px] py-3 text-[11px] font-bold uppercase tracking-wider text-navy-700`}
                 >
                   Category
                 </div>
@@ -602,7 +602,7 @@ export function ReforecastPage() {
                     >
                       <div
                         className={`sticky left-0 z-[4] ${colCat} flex shrink-0 items-center border-r-2 px-[18px] py-2.5 text-[11.5px] font-bold uppercase tracking-wider ${
-                          isYearly ? 'border-gold-300 text-gold-600' : 'border-navy-200 text-navy-700'
+                          isYearly ? 'border-gold-300 bg-gold-100 text-gold-600' : 'border-navy-200 bg-navy-100 text-navy-700'
                         }`}
                       >
                         <span className={`mr-2 inline-block transition-transform ${isCollapsed ? '-rotate-90' : ''}`}>▾</span>
@@ -720,7 +720,7 @@ export function ReforecastPage() {
                         className={`flex ${rowH} border-b-2 ${isYearly ? 'border-gold-300 bg-gold-100' : 'border-navy-200 bg-navy-50'}`}
                       >
                         <div
-                          className={`sticky left-0 z-[3] ${colCat} flex shrink-0 items-center border-r-2 px-[18px] text-[13px] font-bold ${isYearly ? 'border-gold-300 text-gold-600' : 'border-navy-200 text-navy-800'}`}
+                          className={`sticky left-0 z-[3] ${colCat} flex shrink-0 items-center border-r-2 px-[18px] text-[13px] font-bold ${isYearly ? 'border-gold-300 bg-gold-100 text-gold-600' : 'border-navy-200 bg-navy-50 text-navy-800'}`}
                         >
                           {group} subtotal
                         </div>
@@ -1148,7 +1148,7 @@ function SummaryRowFlex({
   return (
     <div className={`flex border-t-2 ${st.br} ${st.bg} ${rowH}`}>
       <div
-        className={`sticky left-0 z-[3] ${colCat} shrink-0 border-r-2 ${st.br} px-[18px] text-[12.5px] font-bold uppercase tracking-wide ${st.fg} flex items-center`}
+        className={`sticky left-0 z-[3] ${colCat} shrink-0 border-r-2 ${st.br} ${st.bg} px-[18px] text-[12.5px] font-bold uppercase tracking-wide ${st.fg} flex items-center`}
       >
         {label}
       </div>
@@ -1205,7 +1205,7 @@ function GrandSummaryFlex({
   return (
     <div className={`flex border-t-2 border-navy-900 bg-navy-800 ${rowH}`}>
       <div
-        className={`sticky left-0 z-[3] ${colCat} shrink-0 border-r-2 border-navy-900 px-[18px] text-sm font-extrabold uppercase tracking-wider text-white flex items-center gap-2 py-3`}
+        className={`sticky left-0 z-[3] ${colCat} shrink-0 border-r-2 border-navy-900 bg-navy-800 px-[18px] text-sm font-extrabold uppercase tracking-wider text-white flex items-center gap-2 py-3`}
       >
         <span className="h-1.5 w-1.5 rounded-full bg-gold-500" aria-hidden />
         {label}
