@@ -34,6 +34,7 @@ import { fmtUsd, fmtUsdSigned, fmtPct } from '@/lib/money';
 import {
   fullYear,
   periodKey,
+  shiftPeriod,
   MONTH_NAMES_SHORT,
   MONTH_NAMES_LONG,
   type Period,
@@ -157,6 +158,33 @@ export function ReforecastPage() {
     queryFn: () => fetchAllRevisedForYear({ household_id: household!.id, year }),
   });
 
+  // Trailing 12 months of actuals ending at the as-of month (inclusive), used
+  // to surface the same rolling 3 / 6 / 12-month averages as the Averages
+  // report. This range can spill into the prior year, so it is fetched
+  // separately from the in-year `actualsQ` above.
+  const avgAnchor: Period = useMemo(
+    () => ({ year, month: asOfMonth >= 1 ? asOfMonth : 12 }),
+    [year, asOfMonth],
+  );
+  const avgFrom = useMemo(() => shiftPeriod(avgAnchor, -11), [avgAnchor]);
+  const trailingActualsQ = useQuery({
+    queryKey: [
+      'reforecast-trailing-actuals',
+      household?.id,
+      schemeQ.data,
+      avgAnchor.year,
+      avgAnchor.month,
+    ],
+    enabled: !!household?.id && !!schemeQ.data && asOfMonth >= 1,
+    queryFn: () =>
+      fetchMonthlyActuals({
+        household_id: household!.id,
+        scheme_id: schemeQ.data!,
+        from: avgFrom,
+        to: avgAnchor,
+      }),
+  });
+
   const budgetLookup: BudgetLookup = useMemo(
     () => (budgetQ.data ? budgetsToLookup(budgetQ.data) : new Map()),
     [budgetQ.data],
@@ -165,6 +193,17 @@ export function ReforecastPage() {
     () => (actualsQ.data ? actualsToLookup(actualsQ.data) : new Map()),
     [actualsQ.data],
   );
+
+  const trailingLookup: ActualLookup = useMemo(
+    () => (trailingActualsQ.data ? actualsToLookup(trailingActualsQ.data) : new Map()),
+    [trailingActualsQ.data],
+  );
+  // 12 trailing months ending at (and including) the as-of month.
+  const trailing12: Period[] = useMemo(() => {
+    const out: Period[] = [];
+    for (let i = 11; i >= 0; i--) out.push(shiftPeriod(avgAnchor, -i));
+    return out;
+  }, [avgAnchor]);
 
   const revisedSeedLookup: RevisedLookup = useMemo(() => {
     const rows = revisedAllQ.data ?? [];
@@ -202,6 +241,22 @@ export function ReforecastPage() {
     (catId: string, month: number) =>
       budgetLookup.get(`${catId}|${periodKey({ year, month })}`) ?? 0,
     [budgetLookup, year],
+  );
+
+  // Rolling 3 / 6 / 12-month actual averages for a category, ending at the
+  // as-of month. Mirrors the Averages report: sum the trailing N months of
+  // actuals and divide by N.
+  const rowAverages = useCallback(
+    (catId: string) => {
+      const sumLast = (n: number) => {
+        const slice = trailing12.slice(-n);
+        let total = 0;
+        for (const p of slice) total += trailingLookup.get(`${catId}|${periodKey(p)}`) ?? 0;
+        return total / slice.length;
+      };
+      return { avg3: sumLast(3), avg6: sumLast(6), avg12: sumLast(12) };
+    },
+    [trailing12, trailingLookup],
   );
 
   const getForecast = useCallback(
@@ -315,6 +370,8 @@ export function ReforecastPage() {
   const colCat = 'min-w-[260px] w-[260px]';
   const colTot = dense ? 'min-w-[120px] w-[120px]' : 'min-w-[132px] w-[132px]';
   const colVar = 'min-w-[110px] w-[110px]';
+  const colAvg = dense ? 'min-w-[84px] w-[84px]' : 'min-w-[92px] w-[92px]';
+  const colAvgPx = dense ? 84 : 92;
   const colEasy = 'min-w-[50px] w-[50px]';
 
   const firstForecastMonth = asOfMonth + 1;
@@ -360,15 +417,44 @@ export function ReforecastPage() {
   });
   const grandMonthly = monthlyProjected.map((v, i) => v + yearlyProjected[i]!);
 
+  const sumAverages = useCallback(
+    (cats: ReportCategory[]): [number, number, number] => {
+      let a3 = 0;
+      let a6 = 0;
+      let a12 = 0;
+      for (const c of cats) {
+        const a = rowAverages(c.id);
+        a3 += a.avg3;
+        a6 += a.avg6;
+        a12 += a.avg12;
+      }
+      return [a3, a6, a12];
+    },
+    [rowAverages],
+  );
+  const monthlyAvgTotals = useMemo(() => sumAverages(monthlyCats), [sumAverages, monthlyCats]);
+  const yearlyAvgTotals = useMemo(() => sumAverages(yearlyCats), [sumAverages, yearlyCats]);
+  const grandAvgTotals: [number, number, number] = [
+    monthlyAvgTotals[0] + yearlyAvgTotals[0],
+    monthlyAvgTotals[1] + yearlyAvgTotals[1],
+    monthlyAvgTotals[2] + yearlyAvgTotals[2],
+  ];
+
   const loading =
     schemeQ.isLoading ||
     categoriesQ.isLoading ||
     budgetQ.isLoading ||
     actualsQ.isLoading ||
     revisedAllQ.isLoading ||
+    trailingActualsQ.isLoading ||
     defaultPeriod.loading;
   const firstError =
-    schemeQ.error ?? categoriesQ.error ?? budgetQ.error ?? actualsQ.error ?? revisedAllQ.error;
+    schemeQ.error ??
+    categoriesQ.error ??
+    budgetQ.error ??
+    actualsQ.error ??
+    revisedAllQ.error ??
+    trailingActualsQ.error;
 
   const noActualsYet = asOfMonth === 0;
 
@@ -522,7 +608,8 @@ export function ReforecastPage() {
             <div
               className="inline-block min-w-full"
               style={{
-                minWidth: 260 + 12 * (dense ? 96 : 108) + (dense ? 120 : 132) + 110 + 50,
+                minWidth:
+                  260 + 12 * (dense ? 96 : 108) + (dense ? 120 : 132) + 110 + 3 * colAvgPx + 50,
               }}
             >
               <div className="sticky top-0 z-[5] flex border-b-2 border-navy-200 bg-navy-50">
@@ -564,6 +651,21 @@ export function ReforecastPage() {
                 >
                   vs Budget
                 </div>
+                {(['3-mo', '6-mo', '12-mo'] as const).map((lbl, i) => (
+                  <div
+                    key={lbl}
+                    className={`${colAvg} flex shrink-0 flex-col items-end justify-end bg-gray-50/70 px-3 py-1.5 ${
+                      i === 0 ? 'border-l-2 border-navy-200' : 'border-l border-gray-200'
+                    }`}
+                  >
+                    <span className="text-[9.5px] font-bold uppercase tracking-wide text-gray-400">
+                      Avg
+                    </span>
+                    <span className="text-xs font-bold uppercase tracking-wide text-gray-500">
+                      {lbl}
+                    </span>
+                  </div>
+                ))}
                 <div className={`${colEasy} shrink-0`} />
               </div>
 
@@ -586,10 +688,17 @@ export function ReforecastPage() {
                 const subProj = subs.reduce((a, b) => a + b, 0);
                 let gBudget = 0;
                 let gProj = 0;
+                let gAvg3 = 0;
+                let gAvg6 = 0;
+                let gAvg12 = 0;
                 for (const c of cats) {
                   const rm = rowMetricsForCategory(c, asOfMonth, actualsLookup, getForecast, budgetLookup, year);
                   gBudget += rm.budgetTotal;
                   gProj += rm.projected;
+                  const a = rowAverages(c.id);
+                  gAvg3 += a.avg3;
+                  gAvg6 += a.avg6;
+                  gAvg12 += a.avg12;
                 }
                 const gVar = gProj - gBudget;
 
@@ -623,12 +732,19 @@ export function ReforecastPage() {
                       ))}
                       <div className={`${colTot} shrink-0 border-l-2 ${isYearly ? 'border-gold-300 bg-gold-100' : 'border-navy-200 bg-navy-100'}`} />
                       <div className={`${colVar} shrink-0`} />
+                      {[0, 1, 2].map((i) => (
+                        <div
+                          key={i}
+                          className={`${colAvg} shrink-0 ${i === 0 ? 'border-l-2 border-navy-200' : ''}`}
+                        />
+                      ))}
                       <div className={`${colEasy} shrink-0`} />
                     </button>
 
                     {!isCollapsed &&
                       cats.map((c) => {
                         const rm = rowMetricsForCategory(c, asOfMonth, actualsLookup, getForecast, budgetLookup, year);
+                        const avgs = rowAverages(c.id);
                         const isMonthlyKind = !c.is_yearly && canonicalSpendGroup(c.group_name) !== 'Yearly';
                         return (
                           <div key={c.id} className={`group flex ${rowH} bg-white`}>
@@ -695,6 +811,16 @@ export function ReforecastPage() {
                                 <span className="text-gray-300">—</span>
                               )}
                             </div>
+                            {([avgs.avg3, avgs.avg6, avgs.avg12] as const).map((a, i) => (
+                              <div
+                                key={i}
+                                className={`${colAvg} flex shrink-0 items-center justify-end border-b border-gray-100 bg-gray-50/40 px-3 tabular-nums ${cellFs} text-gray-600 ${
+                                  i === 0 ? 'border-l-2 border-navy-200' : 'border-l border-gray-100'
+                                }`}
+                              >
+                                {Math.round(a) !== 0 ? fmtUsd(a) : <span className="text-gray-300">—</span>}
+                              </div>
+                            ))}
                             <div
                               className={`flex shrink-0 items-center justify-center border-b border-gray-100 px-1 ${colEasy}`}
                             >
@@ -742,6 +868,20 @@ export function ReforecastPage() {
                         >
                           {fmtUsdSigned(gVar)}
                         </div>
+                        {([gAvg3, gAvg6, gAvg12] as const).map((a, i) => (
+                          <div
+                            key={i}
+                            className={`${colAvg} flex shrink-0 items-center justify-end px-3 tabular-nums ${cellFs} font-bold ${isYearly ? 'text-gold-600' : 'text-navy-700'} ${
+                              i === 0
+                                ? isYearly
+                                  ? 'border-l-2 border-gold-300'
+                                  : 'border-l-2 border-navy-200'
+                                : ''
+                            }`}
+                          >
+                            {Math.round(a) !== 0 ? fmtUsd(a) : <span className="text-gray-300">—</span>}
+                          </div>
+                        ))}
                         <div className={`${colEasy} ${isYearly ? 'bg-gold-100' : 'bg-navy-50'}`} />
                       </div>
                     )}
@@ -753,12 +893,14 @@ export function ReforecastPage() {
                 label="Monthly Categories Total"
                 values={monthlyProjected}
                 total={monthlyProjected.reduce((a, b) => a + b, 0)}
+                avgTotals={monthlyAvgTotals}
                 tone="navy"
                 firstForecastMonth={firstForecastMonth}
                 colCat={colCat}
                 colMonthMin={colMonthMin}
                 colTot={colTot}
                 colVar={colVar}
+                colAvg={colAvg}
                 colEasy={colEasy}
                 rowH={rowH}
                 cellFs={cellFs}
@@ -767,12 +909,14 @@ export function ReforecastPage() {
                 label="Yearly Categories Total"
                 values={yearlyProjected}
                 total={yearlyProjected.reduce((a, b) => a + b, 0)}
+                avgTotals={yearlyAvgTotals}
                 tone="gold"
                 firstForecastMonth={firstForecastMonth}
                 colCat={colCat}
                 colMonthMin={colMonthMin}
                 colTot={colTot}
                 colVar={colVar}
+                colAvg={colAvg}
                 colEasy={colEasy}
                 rowH={rowH}
                 cellFs={cellFs}
@@ -782,10 +926,12 @@ export function ReforecastPage() {
                 values={grandMonthly}
                 total={grand.projected}
                 variance={grand.variance}
+                avgTotals={grandAvgTotals}
                 firstForecastMonth={firstForecastMonth}
                 colCat={colCat}
                 colMonthMin={colMonthMin}
                 colVar={colVar}
+                colAvg={colAvg}
                 colEasy={colEasy}
                 rowH={rowH}
                 cellFs={cellFs}
@@ -1118,12 +1264,14 @@ function SummaryRowFlex({
   label,
   values,
   total,
+  avgTotals,
   tone,
   firstForecastMonth,
   colCat,
   colMonthMin,
   colTot,
   colVar,
+  colAvg,
   colEasy,
   rowH,
   cellFs,
@@ -1131,12 +1279,14 @@ function SummaryRowFlex({
   label: string;
   values: number[];
   total: number;
+  avgTotals: [number, number, number];
   tone: 'navy' | 'gold';
   firstForecastMonth: number;
   colCat: string;
   colMonthMin: string;
   colTot: string;
   colVar: string;
+  colAvg: string;
   colEasy: string;
   rowH: string;
   cellFs: string;
@@ -1172,6 +1322,16 @@ function SummaryRowFlex({
         {fmtUsd(total)}
       </div>
       <div className={`${colVar} shrink-0 ${st.bg}`} />
+      {avgTotals.map((a, i) => (
+        <div
+          key={i}
+          className={`${colAvg} flex shrink-0 items-center justify-end px-3 tabular-nums ${cellFs} font-bold ${st.fg} ${st.bg} ${
+            i === 0 ? `border-l-2 ${st.br}` : ''
+          }`}
+        >
+          {Math.round(a) !== 0 ? fmtUsd(a) : <span className="text-gray-300">—</span>}
+        </div>
+      ))}
       <div className={`${colEasy} shrink-0 ${st.bg}`} />
     </div>
   );
@@ -1182,10 +1342,12 @@ function GrandSummaryFlex({
   values,
   total,
   variance,
+  avgTotals,
   firstForecastMonth,
   colCat,
   colMonthMin,
   colVar,
+  colAvg,
   colEasy,
   rowH,
   cellFs,
@@ -1194,10 +1356,12 @@ function GrandSummaryFlex({
   values: number[];
   total: number;
   variance: number;
+  avgTotals: [number, number, number];
   firstForecastMonth: number;
   colCat: string;
   colMonthMin: string;
   colVar: string;
+  colAvg: string;
   colEasy: string;
   rowH: string;
   cellFs: string;
@@ -1233,6 +1397,16 @@ function GrandSummaryFlex({
         {variance !== 0 && <span className="mr-0.5">{over ? '▲' : '▼'}</span>}
         {fmtUsdSigned(variance)}
       </div>
+      {avgTotals.map((a, i) => (
+        <div
+          key={i}
+          className={`${colAvg} flex shrink-0 items-center justify-end px-3 py-3 tabular-nums ${cellFs} font-extrabold text-white ${
+            i === 0 ? 'border-l-2 border-navy-700' : ''
+          }`}
+        >
+          {Math.round(a) !== 0 ? fmtUsd(a) : <span className="text-white/30">—</span>}
+        </div>
+      ))}
       <div className={`${colEasy} bg-navy-800`} />
     </div>
   );
