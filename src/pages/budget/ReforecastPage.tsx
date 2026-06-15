@@ -651,12 +651,10 @@ export function ReforecastPage() {
                 >
                   vs Budget
                 </div>
-                {(['3-mo', '6-mo', '12-mo'] as const).map((lbl, i) => (
+                {(['3-mo', '6-mo', '12-mo'] as const).map((lbl) => (
                   <div
                     key={lbl}
-                    className={`${colAvg} flex shrink-0 flex-col items-end justify-end bg-gray-50/70 px-3 py-1.5 ${
-                      i === 0 ? 'border-l-2 border-navy-200' : 'border-l border-gray-200'
-                    }`}
+                    className={`${colAvg} flex shrink-0 flex-col items-end justify-end border-l border-gray-200 bg-gray-50/70 px-3 py-1.5`}
                   >
                     <span className="text-[9.5px] font-bold uppercase tracking-wide text-gray-400">
                       Avg
@@ -735,7 +733,7 @@ export function ReforecastPage() {
                       {[0, 1, 2].map((i) => (
                         <div
                           key={i}
-                          className={`${colAvg} shrink-0 ${i === 0 ? 'border-l-2 border-navy-200' : ''}`}
+                          className={`${colAvg} shrink-0 border-l ${isYearly ? 'border-gold-300' : 'border-navy-200'}`}
                         />
                       ))}
                       <div className={`${colEasy} shrink-0`} />
@@ -814,9 +812,7 @@ export function ReforecastPage() {
                             {([avgs.avg3, avgs.avg6, avgs.avg12] as const).map((a, i) => (
                               <div
                                 key={i}
-                                className={`${colAvg} flex shrink-0 items-center justify-end border-b border-gray-100 bg-gray-50/40 px-3 tabular-nums ${cellFs} text-gray-600 ${
-                                  i === 0 ? 'border-l-2 border-navy-200' : 'border-l border-gray-100'
-                                }`}
+                                className={`${colAvg} flex shrink-0 items-center justify-end border-b border-l border-gray-100 bg-gray-50/40 px-3 tabular-nums ${cellFs} text-gray-600`}
                               >
                                 {Math.round(a) !== 0 ? fmtUsd(a) : <span className="text-gray-300">—</span>}
                               </div>
@@ -871,13 +867,7 @@ export function ReforecastPage() {
                         {([gAvg3, gAvg6, gAvg12] as const).map((a, i) => (
                           <div
                             key={i}
-                            className={`${colAvg} flex shrink-0 items-center justify-end px-3 tabular-nums ${cellFs} font-bold ${isYearly ? 'text-gold-600' : 'text-navy-700'} ${
-                              i === 0
-                                ? isYearly
-                                  ? 'border-l-2 border-gold-300'
-                                  : 'border-l-2 border-navy-200'
-                                : ''
-                            }`}
+                            className={`${colAvg} flex shrink-0 items-center justify-end border-l px-3 tabular-nums ${cellFs} font-bold ${isYearly ? 'border-gold-300 text-gold-600' : 'border-navy-200 text-navy-700'}`}
                           >
                             {Math.round(a) !== 0 ? fmtUsd(a) : <span className="text-gray-300">—</span>}
                           </div>
@@ -1325,9 +1315,7 @@ function SummaryRowFlex({
       {avgTotals.map((a, i) => (
         <div
           key={i}
-          className={`${colAvg} flex shrink-0 items-center justify-end px-3 tabular-nums ${cellFs} font-bold ${st.fg} ${st.bg} ${
-            i === 0 ? `border-l-2 ${st.br}` : ''
-          }`}
+          className={`${colAvg} flex shrink-0 items-center justify-end border-l ${st.br} px-3 tabular-nums ${cellFs} font-bold ${st.fg} ${st.bg}`}
         >
           {Math.round(a) !== 0 ? fmtUsd(a) : <span className="text-gray-300">—</span>}
         </div>
@@ -1400,9 +1388,7 @@ function GrandSummaryFlex({
       {avgTotals.map((a, i) => (
         <div
           key={i}
-          className={`${colAvg} flex shrink-0 items-center justify-end px-3 py-3 tabular-nums ${cellFs} font-extrabold text-white ${
-            i === 0 ? 'border-l-2 border-navy-700' : ''
-          }`}
+          className={`${colAvg} flex shrink-0 items-center justify-end border-l border-navy-700 px-3 py-3 tabular-nums ${cellFs} font-extrabold text-white`}
         >
           {Math.round(a) !== 0 ? fmtUsd(a) : <span className="text-white/30">—</span>}
         </div>
