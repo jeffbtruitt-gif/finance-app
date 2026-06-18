@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, Navigate } from 'react-router-dom';
+import { Link, Navigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/api/auth';
 import { Button } from '@/components/ds';
 import { ParticleSky } from '@/components/auth/ParticleSky';
@@ -8,12 +8,14 @@ const LOGO_SRC = `${import.meta.env.BASE_URL}truitt-finance-logo.png`;
 
 export function LoginPage() {
   const { session, signIn } = useAuth();
+  const [searchParams] = useSearchParams();
+  const returnTo = searchParams.get('returnTo') ?? '/';
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  if (session) return <Navigate to="/" replace />;
+  if (session) return <Navigate to={returnTo} replace />;
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

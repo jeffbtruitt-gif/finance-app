@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from '@/api/auth';
 import { LoginPage } from '@/pages/auth/LoginPage';
 import { ResetPasswordPage } from '@/pages/auth/ResetPasswordPage';
@@ -36,6 +36,7 @@ import { MobileApp } from './pages/mobile/MobileApp';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { session, loading } = useAuth();
+  const location = useLocation();
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center text-gray-500">
@@ -43,7 +44,10 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
       </div>
     );
   }
-  if (!session) return <Navigate to="/login" replace />;
+  if (!session) {
+    const returnTo = location.pathname !== '/' ? `?returnTo=${encodeURIComponent(location.pathname)}` : '';
+    return <Navigate to={`/login${returnTo}`} replace />;
+  }
   return <>{children}</>;
 }
 
