@@ -40,14 +40,20 @@ export function LoginPage() {
         <form onSubmit={onSubmit} className="space-y-3">
           <Field
             label="Email"
+            id="email"
+            name="email"
             type="email"
+            autoComplete="email"
             value={email}
             onChange={setEmail}
             autoFocus
           />
           <Field
             label="Password"
+            id="password"
+            name="password"
             type="password"
+            autoComplete="current-password"
             value={password}
             onChange={setPassword}
           />
@@ -75,24 +81,33 @@ export function LoginPage() {
 
 function Field({
   label,
+  id,
+  name,
   type,
+  autoComplete,
   value,
   onChange,
   autoFocus,
 }: {
   label: string;
+  id: string;
+  name: string;
   type: 'email' | 'password';
+  autoComplete: string;
   value: string;
   onChange: (v: string) => void;
   autoFocus?: boolean;
 }) {
   return (
     <div>
-      <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-gray-500">
+      <label htmlFor={id} className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-gray-500">
         {label}
       </label>
       <input
+        id={id}
+        name={name}
         type={type}
+        autoComplete={autoComplete}
         required
         autoFocus={autoFocus}
         value={value}
