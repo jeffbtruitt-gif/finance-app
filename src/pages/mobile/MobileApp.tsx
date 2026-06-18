@@ -55,37 +55,6 @@ function groupByDate(txs: TransactionRow[]): [string, TransactionRow[]][] {
   return [...map.entries()].sort(([a], [b]) => b.localeCompare(a));
 }
 
-// ── Status bar icons ──────────────────────────────────────────────────────────
-
-function SignalSVG() {
-  return (
-    <svg width="17" height="12" viewBox="0 0 17 12" fill="none">
-      <rect x="0" y="8" width="3" height="4" rx="1" fill="#0d1527" />
-      <rect x="4.5" y="5.5" width="3" height="6.5" rx="1" fill="#0d1527" />
-      <rect x="9" y="3" width="3" height="9" rx="1" fill="#0d1527" />
-      <rect x="13.5" y="0" width="3" height="12" rx="1" fill="#0d1527" />
-    </svg>
-  );
-}
-function WifiSVG() {
-  return (
-    <svg width="16" height="12" viewBox="0 0 16 12" fill="none">
-      <path d="M1 4.5C3.2 2.2 5.9 1 8 1s4.8 1.2 7 3.5" stroke="#0d1527" strokeWidth="1.6" strokeLinecap="round" />
-      <path d="M3.5 7C5 5.4 6.5 4.6 8 4.6s3 .8 4.5 2.4" stroke="#0d1527" strokeWidth="1.6" strokeLinecap="round" />
-      <circle cx="8" cy="10.5" r="1.4" fill="#0d1527" />
-    </svg>
-  );
-}
-function BatterySVG() {
-  return (
-    <svg width="25" height="12" viewBox="0 0 25 12" fill="none">
-      <rect x="0.5" y="0.5" width="21" height="11" rx="3.5" stroke="#0d1527" strokeOpacity="0.35" />
-      <rect x="2" y="2" width="17" height="8" rx="2" fill="#0d1527" />
-      <path d="M23 4.5v3" stroke="#0d1527" strokeOpacity="0.4" strokeWidth="1.8" strokeLinecap="round" />
-    </svg>
-  );
-}
-
 // ── Tab icons ─────────────────────────────────────────────────────────────────
 
 function InboxIcon({ active }: { active: boolean }) {
@@ -722,45 +691,12 @@ function ScreenHeader({ title, subtitle }: { title: string; subtitle?: string })
   );
 }
 
-// ── iOS phone frame ───────────────────────────────────────────────────────────
+// ── Full-screen wrapper ───────────────────────────────────────────────────────
 
 function IOSFrame({ children }: { children: React.ReactNode }) {
   return (
-    <div style={{
-      minHeight: '100vh',
-      background: 'radial-gradient(140% 120% at 50% -10%, #eef0f8 0%, #e2e6f0 50%, #d4d9e7 100%)',
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      padding: '24px 16px',
-    }}>
-      <div style={{
-        width: 390, maxWidth: '100%',
-        height: 844, maxHeight: 'calc(100vh - 48px)',
-        background: '#f4f5fb',
-        borderRadius: 55,
-        overflow: 'hidden',
-        display: 'flex', flexDirection: 'column',
-        position: 'relative',
-        boxShadow: [
-          '0 60px 120px rgba(13,21,39,0.45)',
-          '0 0 0 1.5px rgba(255,255,255,0.35)',
-          '0 0 0 12px #1a1a1c',
-          '0 0 0 13px #2c2c2e',
-        ].join(', '),
-      }}>
-        {/* Dynamic island */}
-        <div style={{ position: 'absolute', top: 14, left: '50%', transform: 'translateX(-50%)', width: 126, height: 37, background: '#000', borderRadius: 22, zIndex: 50 }} />
-        {/* Status bar */}
-        <div style={{ height: 58, flexShrink: 0, display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', padding: '0 28px 10px', position: 'relative', zIndex: 40 }}>
-          <span style={{ fontSize: 15, fontWeight: 600, fontFamily: 'system-ui', color: '#0d1527' }}>9:41</span>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <SignalSVG /><WifiSVG /><BatterySVG />
-          </div>
-        </div>
-        {/* App content */}
-        <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-          {children}
-        </div>
-      </div>
+    <div style={{ width: '100%', height: '100vh', display: 'flex', flexDirection: 'column', background: '#f4f5fb', overflow: 'hidden' }}>
+      {children}
     </div>
   );
 }
