@@ -55,34 +55,6 @@ function groupByDate(txs: TransactionRow[]): [string, TransactionRow[]][] {
   return [...map.entries()].sort(([a], [b]) => b.localeCompare(a));
 }
 
-// ── Tab icons ─────────────────────────────────────────────────────────────────
-
-function InboxIcon({ active }: { active: boolean }) {
-  const c = active ? '#0d1527' : '#9aa0af';
-  return (
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-      <path d="M4 14h4l1.5 3h5L16 14h4" stroke={c} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M4 14V5a1 1 0 011-1h14a1 1 0 011 1v9" stroke={c} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-function ListIcon({ active }: { active: boolean }) {
-  const c = active ? '#0d1527' : '#9aa0af';
-  return (
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-      <path d="M4 6h16M4 10h16M4 14h10M4 18h8" stroke={c} strokeWidth="1.7" strokeLinecap="round" />
-    </svg>
-  );
-}
-function BoltIcon({ active }: { active: boolean }) {
-  const c = active ? '#0d1527' : '#9aa0af';
-  return (
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-      <path d="M13 2L4 14h7l-1 8 9-12h-7l1-8z" stroke={c} strokeWidth="1.7" strokeLinejoin="round" strokeLinecap="round" />
-    </svg>
-  );
-}
-
 // ── Shared sub-components ─────────────────────────────────────────────────────
 
 function Avatar({ accountId, name, size = 42 }: { accountId: string; name: string; size?: number }) {
@@ -556,29 +528,17 @@ function conditionLabel(rule: Rule): string {
   return `${fieldLabel} ${opLabel} "${value.length > 20 ? value.slice(0, 20) + '…' : value}"${extra}`;
 }
 
-function RulesScreen({ rules, onToggle, onNew }: RulesScreenProps) {
+function RulesScreen({ rules, onToggle }: Omit<RulesScreenProps, 'onNew'>) {
   const active = rules.filter(r => r.is_active).length;
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-      <div style={{ padding: '12px 20px 10px', borderBottom: '1px solid #eef0f7', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div>
-          <span style={{ fontFamily: "'Figtree', system-ui", fontSize: 13, color: '#7a8196' }}>
-            {active} active rule{active !== 1 ? 's' : ''}
-          </span>
-        </div>
-        <button
-          onClick={onNew}
-          style={{ padding: '7px 14px', borderRadius: 10, background: '#0d1527', color: '#fff', border: 'none', fontFamily: "'Figtree', system-ui", fontSize: 13, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
-        >
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-            <path d="M8 2v12M2 8h12" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-          </svg>
-          New rule
-        </button>
-      </div>
-
       <div style={{ flex: 1, overflowY: 'auto', padding: '10px 16px' }}>
+        {active > 0 && (
+          <div style={{ padding: '4px 4px 10px', fontFamily: "'Figtree', system-ui", fontSize: 12, color: '#9aa0af' }}>
+            {active} active rule{active !== 1 ? 's' : ''}
+          </div>
+        )}
         {rules.length === 0 && (
           <div style={{ padding: 32, textAlign: 'center', color: '#9aa0af', fontFamily: "'Figtree', system-ui", fontSize: 14 }}>
             No rules yet. Create one from a transaction.
@@ -626,67 +586,86 @@ function RulesScreen({ rules, onToggle, onNew }: RulesScreenProps) {
 
 type Tab = 'review' | 'tx' | 'rules';
 
-function TabBar({ tab, setTab, reviewCount }: { tab: Tab; setTab: (t: Tab) => void; reviewCount: number }) {
-  const tabs: { id: Tab; label: string; icon: (active: boolean) => JSX.Element }[] = [
-    { id: 'review', label: 'Review', icon: a => <InboxIcon active={a} /> },
-    { id: 'tx', label: 'Transactions', icon: a => <ListIcon active={a} /> },
-    { id: 'rules', label: 'Rules', icon: a => <BoltIcon active={a} /> },
+function TabStrip({ tab, setTab, reviewCount }: { tab: Tab; setTab: (t: Tab) => void; reviewCount: number }) {
+  const tabs: { id: Tab; label: string }[] = [
+    { id: 'review', label: 'Review' },
+    { id: 'tx', label: 'Transactions' },
+    { id: 'rules', label: 'Rules' },
   ];
   return (
-    <div style={{
-      flexShrink: 0, display: 'flex', borderTop: '1px solid #eef0f7',
-      background: 'rgba(255,255,255,0.95)', backdropFilter: 'blur(12px)',
-      paddingBottom: 6,
-    }}>
-      {tabs.map(t => (
-        <button
-          key={t.id}
-          onClick={() => setTab(t.id)}
-          style={{
-            flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center',
-            gap: 3, padding: '10px 0 4px', background: 'transparent', border: 'none',
-            cursor: 'pointer', position: 'relative',
-          }}
-        >
-          <div style={{ position: 'relative' }}>
-            {t.icon(tab === t.id)}
+    <div style={{ display: 'flex', padding: '0 20px', gap: 4 }}>
+      {tabs.map(t => {
+        const active = tab === t.id;
+        return (
+          <button
+            key={t.id}
+            onClick={() => setTab(t.id)}
+            style={{
+              padding: '10px 12px 9px', background: 'transparent', border: 'none',
+              borderBottom: `2px solid ${active ? '#0d1527' : 'transparent'}`,
+              marginBottom: -1,
+              cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
+              fontFamily: "'Figtree', system-ui",
+              fontSize: 14, fontWeight: active ? 700 : 500,
+              color: active ? '#0d1527' : '#9aa0af',
+              transition: 'color 0.15s',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {t.label}
             {t.id === 'review' && reviewCount > 0 && (
               <span style={{
-                position: 'absolute', top: -4, right: -6, minWidth: 16, height: 16,
-                background: '#e5554f', color: '#fff', borderRadius: 8,
-                fontFamily: "'Figtree', system-ui", fontSize: 10, fontWeight: 700,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                padding: '0 3px', lineHeight: 1,
+                minWidth: 18, height: 18, background: '#e5554f', color: '#fff',
+                borderRadius: 9, fontFamily: "'Figtree', system-ui",
+                fontSize: 11, fontWeight: 700,
+                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                padding: '0 4px',
               }}>
                 {reviewCount > 99 ? '99+' : reviewCount}
               </span>
             )}
-          </div>
-          <span style={{
-            fontFamily: "'Figtree', system-ui", fontSize: 10, fontWeight: 600,
-            color: tab === t.id ? '#0d1527' : '#9aa0af',
-          }}>
-            {t.label}
-          </span>
-        </button>
-      ))}
+          </button>
+        );
+      })}
     </div>
   );
 }
 
-// ── Screen header ─────────────────────────────────────────────────────────────
+// ── Frozen page header (title + tab strip) ────────────────────────────────────
 
-function ScreenHeader({ title, subtitle }: { title: string; subtitle?: string }) {
+function PageHeader({
+  tab, setTab, reviewCount, subtitle, onNewRule,
+}: {
+  tab: Tab; setTab: (t: Tab) => void; reviewCount: number;
+  subtitle?: string; onNewRule: () => void;
+}) {
+  const titles: Record<Tab, string> = { review: 'Review', tx: 'Transactions', rules: 'Rules' };
   return (
-    <div style={{ padding: '8px 20px 14px', background: '#fff', borderBottom: '1px solid #eef0f7', flexShrink: 0 }}>
-      <div style={{ fontFamily: "'Figtree', system-ui", fontWeight: 800, fontSize: 26, color: '#0d1527', letterSpacing: '-0.02em' }}>
-        {title}
-      </div>
-      {subtitle && (
-        <div style={{ fontFamily: "'Figtree', system-ui", fontSize: 13, color: '#7a8196', marginTop: 3 }}>
-          {subtitle}
+    <div style={{ flexShrink: 0, background: '#fff', borderBottom: '1px solid #eef0f7' }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', padding: '14px 20px 6px' }}>
+        <div>
+          <div style={{ fontFamily: "'Figtree', system-ui", fontWeight: 800, fontSize: 26, color: '#0d1527', letterSpacing: '-0.02em' }}>
+            {titles[tab]}
+          </div>
+          {subtitle && (
+            <div style={{ fontFamily: "'Figtree', system-ui", fontSize: 13, color: '#7a8196', marginTop: 3 }}>
+              {subtitle}
+            </div>
+          )}
         </div>
-      )}
+        {tab === 'rules' && (
+          <button
+            onClick={onNewRule}
+            style={{ marginTop: 4, padding: '7px 14px', borderRadius: 10, background: '#0d1527', color: '#fff', border: 'none', fontFamily: "'Figtree', system-ui", fontSize: 13, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}
+          >
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+              <path d="M8 2v12M2 8h12" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+            </svg>
+            New rule
+          </button>
+        )}
+      </div>
+      <TabStrip tab={tab} setTab={setTab} reviewCount={reviewCount} />
     </div>
   );
 }
@@ -706,7 +685,7 @@ function IOSFrame({ children }: { children: React.ReactNode }) {
 function Toast({ message }: { message: string }) {
   return (
     <div style={{
-      position: 'absolute', bottom: 90, left: '50%', transform: 'translateX(-50%)',
+      position: 'absolute', bottom: 24, left: '50%', transform: 'translateX(-50%)',
       background: 'rgba(13,21,39,0.9)', color: '#fff',
       padding: '10px 20px', borderRadius: 12,
       fontFamily: "'Figtree', system-ui", fontSize: 13, fontWeight: 600,
@@ -850,19 +829,22 @@ export function MobileApp() {
     );
   }
 
+  const reviewSubtitle = visibleQueue.length > 0
+    ? `${visibleQueue.length} transaction${visibleQueue.length !== 1 ? 's' : ''} didn't match a rule`
+    : undefined;
+
   return (
     <IOSFrame>
-      {/* Screen header */}
-      {tab === 'review' && (
-        <ScreenHeader
-          title="Review"
-          subtitle={visibleQueue.length > 0 ? `${visibleQueue.length} transaction${visibleQueue.length !== 1 ? 's' : ''} didn't match a rule` : undefined}
-        />
-      )}
-      {tab === 'tx' && <ScreenHeader title="Transactions" />}
-      {tab === 'rules' && <ScreenHeader title="Rules" />}
+      {/* Frozen header: title + tab strip */}
+      <PageHeader
+        tab={tab}
+        setTab={setTab}
+        reviewCount={visibleQueue.length}
+        subtitle={tab === 'review' ? reviewSubtitle : undefined}
+        onNewRule={() => { setMakeRuleSeed(null); setMakeRuleOpen(true); }}
+      />
 
-      {/* Screen content */}
+      {/* Scrollable content */}
       <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative' }}>
         {tab === 'review' && (
           <ReviewScreen
@@ -887,7 +869,6 @@ export function MobileApp() {
           <RulesScreen
             rules={rules}
             onToggle={rule => toggleMutation.mutate(rule)}
-            onNew={() => { setMakeRuleSeed(null); setMakeRuleOpen(true); }}
           />
         )}
 
@@ -904,13 +885,6 @@ export function MobileApp() {
         {/* Toast */}
         {toast && <Toast message={toast} />}
       </div>
-
-      {/* Tab bar */}
-      <TabBar
-        tab={tab}
-        setTab={setTab}
-        reviewCount={visibleQueue.length}
-      />
 
       {/* MakeRuleModal renders as a fixed overlay over the whole page */}
       <MakeRuleModal
