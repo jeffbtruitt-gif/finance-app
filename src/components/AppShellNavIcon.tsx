@@ -28,7 +28,8 @@ export type AppShellNavIconId =
   | 'managerules'
   | 'bsallocation'
   | 'performance'
-  | 'manageaccounts';
+  | 'manageaccounts'
+  | 'review';
 
 const NAVY_ACTIVE = '#243460'; // navy-700
 const SKYLINE_IDLE = skylinePalette.DEFAULT;
@@ -219,6 +220,12 @@ export function AppShellNavIcon({
           strokeLinejoin="round"
         />
         <circle cx="9" cy="8" r="1.8" stroke={s} strokeWidth={sw} />
+      </svg>
+    ),
+    review: (
+      <svg width={16} height={16} viewBox="0 0 18 18" fill="none" aria-hidden>
+        <path d="M3 10.5l2-7h8l2 7" stroke={s} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M3 10.5h3.5l1 2.5h3l1-2.5H16v4a.5.5 0 01-.5.5h-13a.5.5 0 01-.5-.5v-4z" stroke={s} strokeWidth={sw} strokeLinejoin="round" />
       </svg>
     ),
     manageaccounts: (

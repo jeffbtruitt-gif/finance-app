@@ -51,6 +51,7 @@ function buildNavItems(year: number): NavItem[] {
   return [
     { to: '/', label: 'Dashboard', iconId: 'dashboard' },
     { to: '/import', label: 'Import Data', iconId: 'import', group: 'Budget Input' },
+    { to: '/review', label: 'Review', iconId: 'review', group: 'Budget Input', id: 'review' },
     {
       to: '/transactions',
       label: 'Create Rules',
@@ -158,10 +159,15 @@ export function AppShell({ children }: { children: ReactNode }) {
     return n > 0 ? n : null;
   }, [uncategorizedSummaryQ.isSuccess, uncategorizedSummaryQ.data?.uncategorized]);
 
-  const labelForNavItem = (item: NavItem) =>
-    item.id === 'create-rules' && createRulesUncategorizedCount != null
-      ? `Create Rules (${createRulesUncategorizedCount})`
-      : item.label;
+  const labelForNavItem = (item: NavItem) => {
+    if (item.id === 'review' && createRulesUncategorizedCount != null) {
+      return `Review (${createRulesUncategorizedCount})`;
+    }
+    if (item.id === 'create-rules' && createRulesUncategorizedCount != null) {
+      return `Create Rules (${createRulesUncategorizedCount})`;
+    }
+    return item.label;
+  };
   /** Unified monthly report uses full-bleed layout; shell header still shows title + period. */
   const reportsFullBleed = location.pathname === '/reports';
 

@@ -11,6 +11,7 @@ import { ImportPage } from './pages/ImportPage';
 import { RulesPage } from './pages/rules/RulesPage';
 import { RuleBuilderPage } from './pages/RuleBuilderPage';
 import { RunRulesPage } from './pages/rules/RunRulesPage';
+import { ReviewPage } from './pages/review/ReviewPage';
 import { OneMonthReportPage } from './pages/reports/OneMonthReportPage';
 import { YtdReportPage } from './pages/reports/YtdReportPage';
 import { AveragesReportPage } from './pages/reports/AveragesReportPage';
@@ -81,6 +82,7 @@ export default function App() {
                   <Route path="/reports/balance-sheet" element={<BalanceSheetReportPage />} />
                   <Route path="/retire" element={<RetirePage />} />
                   <Route path="/college" element={<CollegePage />} />
+                  <Route path="/review" element={<ReviewPage />} />
                   <Route path="/import" element={<ImportPage />} />
                   <Route path="/rules" element={<RulesPage />} />
                   <Route path="/rules/run" element={<RunRulesPage />} />
