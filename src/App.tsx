@@ -32,6 +32,7 @@ import { RetirePage } from './pages/retire/RetirePage';
 import { CollegePage } from './pages/college/CollegePage';
 import { AppPeriodProvider } from '@/lib/appPeriodContext';
 import { PrivacyModeProvider } from '@/lib/privacyModeContext';
+import { MobileApp } from './pages/mobile/MobileApp';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { session, loading } = useAuth();
@@ -52,6 +53,18 @@ export default function App() {
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
+        <Route
+          path="/mobile"
+          element={
+            <ProtectedRoute>
+              <AppPeriodProvider>
+                <PrivacyModeProvider>
+                  <MobileApp />
+                </PrivacyModeProvider>
+              </AppPeriodProvider>
+            </ProtectedRoute>
+          }
+        />
         <Route
           path="/*"
           element={
