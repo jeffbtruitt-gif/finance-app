@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { OneMoScreen } from './OneMoScreen';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { useHousehold } from '@/api/household';
 import { defaultSchemeQueryKey, fetchDefaultSchemeId } from '@/api/reports';
@@ -584,10 +585,11 @@ function RulesScreen({ rules, onToggle }: Omit<RulesScreenProps, 'onNew'>) {
 
 // ── Tab bar ───────────────────────────────────────────────────────────────────
 
-type Tab = 'review' | 'tx' | 'rules';
+type Tab = '1mo' | 'review' | 'tx' | 'rules';
 
 function TabStrip({ tab, setTab, reviewCount }: { tab: Tab; setTab: (t: Tab) => void; reviewCount: number }) {
   const tabs: { id: Tab; label: string }[] = [
+    { id: '1mo', label: '1 MO' },
     { id: 'review', label: 'Review' },
     { id: 'tx', label: 'Transactions' },
     { id: 'rules', label: 'Rules' },
@@ -639,32 +641,34 @@ function PageHeader({
   tab: Tab; setTab: (t: Tab) => void; reviewCount: number;
   subtitle?: string; onNewRule: () => void;
 }) {
-  const titles: Record<Tab, string> = { review: 'Review', tx: 'Transactions', rules: 'Rules' };
+  const titles: Record<Tab, string> = { '1mo': 'Budget', review: 'Review', tx: 'Transactions', rules: 'Rules' };
   return (
     <div style={{ flexShrink: 0, background: '#fff', borderBottom: '1px solid #eef0f7' }}>
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', padding: '14px 20px 6px' }}>
-        <div>
-          <div style={{ fontFamily: "'Figtree', system-ui", fontWeight: 800, fontSize: 26, color: '#0d1527', letterSpacing: '-0.02em' }}>
-            {titles[tab]}
-          </div>
-          {subtitle && (
-            <div style={{ fontFamily: "'Figtree', system-ui", fontSize: 13, color: '#7a8196', marginTop: 3 }}>
-              {subtitle}
+      {tab !== '1mo' && (
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', padding: '14px 20px 6px' }}>
+          <div>
+            <div style={{ fontFamily: "'Figtree', system-ui", fontWeight: 800, fontSize: 26, color: '#0d1527', letterSpacing: '-0.02em' }}>
+              {titles[tab]}
             </div>
+            {subtitle && (
+              <div style={{ fontFamily: "'Figtree', system-ui", fontSize: 13, color: '#7a8196', marginTop: 3 }}>
+                {subtitle}
+              </div>
+            )}
+          </div>
+          {tab === 'rules' && (
+            <button
+              onClick={onNewRule}
+              style={{ marginTop: 4, padding: '7px 14px', borderRadius: 10, background: '#0d1527', color: '#fff', border: 'none', fontFamily: "'Figtree', system-ui", fontSize: 13, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}
+            >
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+                <path d="M8 2v12M2 8h12" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+              </svg>
+              New rule
+            </button>
           )}
         </div>
-        {tab === 'rules' && (
-          <button
-            onClick={onNewRule}
-            style={{ marginTop: 4, padding: '7px 14px', borderRadius: 10, background: '#0d1527', color: '#fff', border: 'none', fontFamily: "'Figtree', system-ui", fontSize: 13, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}
-          >
-            <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
-              <path d="M8 2v12M2 8h12" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-            </svg>
-            New rule
-          </button>
-        )}
-      </div>
+      )}
       <TabStrip tab={tab} setTab={setTab} reviewCount={reviewCount} />
     </div>
   );
@@ -747,7 +751,7 @@ export function MobileApp() {
     queryFn: () => listRules(sid!),
   });
 
-  const [tab, setTab] = useState<Tab>('review');
+  const [tab, setTab] = useState<Tab>('1mo');
   const [localCats, setLocalCats] = useState<Map<string, { id: string; name: string }>>(new Map());
   const [initialTotal, setInitialTotal] = useState<number | null>(null);
   const [sheetTx, setSheetTx] = useState<TransactionRow | null>(null);
@@ -846,6 +850,9 @@ export function MobileApp() {
 
       {/* Scrollable content */}
       <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative' }}>
+        {tab === '1mo' && hid && sid && (
+          <OneMoScreen householdId={hid} schemeId={sid} />
+        )}
         {tab === 'review' && (
           <ReviewScreen
             queue={queue}
