@@ -104,6 +104,9 @@ export function TripsPage() {
             />
           </label>
         </div>
+        {startDate && endDate && endDate < startDate && (
+          <p className="mt-3 text-sm text-neg">Return date must be on or after leave date.</p>
+        )}
         {formError && <p className="mt-3 text-sm text-neg">{formError}</p>}
         <div className="mt-4">
           <Button
