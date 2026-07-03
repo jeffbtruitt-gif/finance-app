@@ -29,7 +29,7 @@ Drop 1: Supabase up      ──┐
                            │
 Drop 2: Local app working ─┼─ test on localhost:5173
                            │
-Drop 3: GitHub Pages live ─┘  test at https://jeffbtruitt-git.github.io/finance-app/
+Drop 3: GitHub Pages live ─┘  test at https://jeffbtruitt-gif.github.io/finance-app/
 ```
 
 ---
@@ -191,7 +191,7 @@ Wait ~2 min for the build + deploy to finish (green check on both jobs).
 
 ### 3d. Visit the deployed app
 
-<https://jeffbtruitt-git.github.io/finance-app/>
+<https://jeffbtruitt-gif.github.io/finance-app/>
 
 You should see the login screen. Log in. Should look identical to localhost.
 
@@ -200,10 +200,10 @@ You should see the login screen. Log in. Should look identical to localhost.
 Supabase's auth flow needs to know where to send password-reset emails. In Supabase:
 
 1. **Authentication → URL Configuration**.
-2. **Site URL**: `https://jeffbtruitt-git.github.io/finance-app/`
+2. **Site URL**: `https://jeffbtruitt-gif.github.io/finance-app/`
 3. **Redirect URLs**: add both
    - `http://localhost:5173/finance-app/reset-password`
-   - `https://jeffbtruitt-git.github.io/finance-app/reset-password`
+   - `https://jeffbtruitt-gif.github.io/finance-app/reset-password`
 
 This isn't strictly needed for sign-in (which uses email/password directly), but it makes password reset work in both environments.
 
@@ -247,6 +247,6 @@ If empty, the UUID was wrong.
 
 **"new row violates row-level security policy"** — the RLS policies are working, you just don't have a household membership row. Same fix.
 
-**404 on `https://jeffbtruitt-git.github.io/finance-app/transactions` after a hard refresh** — should be handled by the `404.html` fallback in the workflow. If not, check that the workflow ran successfully and that `dist/404.html` exists in the deployed artifact.
+**404 on `https://jeffbtruitt-gif.github.io/finance-app/transactions` after a hard refresh** — should be handled by the `404.html` fallback in the workflow. If not, check that the workflow ran successfully and that `dist/404.html` exists in the deployed artifact.
 
 **Asset loads 404 in dev** — make sure the dev server is at `localhost:5173`, not `localhost:5173/finance-app`. The `base` config only kicks in for production builds.
