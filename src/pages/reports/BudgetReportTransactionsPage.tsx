@@ -23,6 +23,7 @@ import { StatusPanel } from '@/components/StatusPanel';
 import { Card, CategoryChip } from '@/components/ds';
 import { accountStripeHex } from '@/pages/transactions/txAccountColor';
 import { TransactionPropertiesDrawer } from '@/pages/transactions/TransactionPropertiesDrawer';
+import { DescriptionSearchLink } from '@/pages/transactions/DescriptionSearchLink';
 import { ColumnFilterPopover } from '@/pages/transactions/ColumnFilterPopover';
 
 type RangeMode = 'all' | 'ytd' | 'month';
@@ -544,7 +545,10 @@ export function BudgetReportTransactionsPage() {
                         </span>
                       </td>
                       <td className="px-2 py-1.5 align-middle">
-                        <span className="truncate font-semibold text-navy-900">{t.description}</span>
+                        <div className="group flex min-w-0 items-center gap-2">
+                          <span className="min-w-0 flex-1 truncate font-semibold text-navy-900">{t.description}</span>
+                          <DescriptionSearchLink description={t.description} />
+                        </div>
                       </td>
                       <td className="px-2 py-1.5 align-middle">
                         <div className="flex min-w-0 items-center gap-2">

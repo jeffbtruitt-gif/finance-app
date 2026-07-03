@@ -31,6 +31,7 @@ import { ReportsSpendTable } from '@/pages/reports/ReportsSpendTable';
 import { ReportsTreemap } from '@/pages/reports/ReportsTreemap';
 import { accountStripeHex } from '@/pages/transactions/txAccountColor';
 import { TransactionPropertiesDrawer } from '@/pages/transactions/TransactionPropertiesDrawer';
+import { DescriptionSearchLink } from '@/pages/transactions/DescriptionSearchLink';
 
 type TabId = 'dashboard' | 'table' | 'tree' | 'detail';
 
@@ -344,7 +345,12 @@ export function ReportsPage() {
                             <td className={`${RT.cellLeft} tabular-nums text-gray-600`}>
                               {formatDate(t.date)}
                             </td>
-                            <td className={`${RT.cellLeft} font-medium text-navy-900`}>{t.description}</td>
+                            <td className={`${RT.cellLeft} font-medium text-navy-900`}>
+                              <div className="group flex min-w-0 items-center gap-2">
+                                <span className="min-w-0 flex-1 truncate">{t.description}</span>
+                                <DescriptionSearchLink description={t.description} />
+                              </div>
+                            </td>
                             <td className={`${RT.cellLeft} w-[148px] max-w-[148px]`}>
                               <div className="flex min-w-0 items-center gap-2">
                                 <span

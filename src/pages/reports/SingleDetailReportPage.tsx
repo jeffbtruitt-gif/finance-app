@@ -19,6 +19,7 @@ import { formatDate } from '@/lib/date';
 import { StatusPanel } from '@/components/StatusPanel';
 import { Card, CategoryChip, RT } from '@/components/ds';
 import { TransactionPropertiesDrawer } from '@/pages/transactions/TransactionPropertiesDrawer';
+import { DescriptionSearchLink } from '@/pages/transactions/DescriptionSearchLink';
 
 type RangeMode = 'month' | 'ytd' | 'all';
 
@@ -235,7 +236,10 @@ export function SingleDetailReportPage() {
                       {formatDate(t.date)}
                     </td>
                     <td className={`${RT.cellLeft} font-medium text-navy-900`}>
-                      {t.description}
+                      <div className="group flex min-w-0 items-center gap-2">
+                        <span className="min-w-0 flex-1 truncate">{t.description}</span>
+                        <DescriptionSearchLink description={t.description} />
+                      </div>
                     </td>
                     <td className={`${RT.cellLeft} text-gray-500`}>
                       {t.account_name}

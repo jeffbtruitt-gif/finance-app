@@ -14,6 +14,7 @@ import { formatMoney } from '@/lib/money';
 import { IconBolt, IconCheck, IconPlay, IconWarn } from './rulesIcons';
 import { SCROLL_TIDY, StatTile } from './rulesShared';
 import { TransactionPropertiesDrawer } from '@/pages/transactions/TransactionPropertiesDrawer';
+import { DescriptionSearchLink } from '@/pages/transactions/DescriptionSearchLink';
 
 type ScopeUi = 'uncategorized' | 'date_range' | 'selection';
 type ShowOnly = 'all' | 'new' | 'rule_to_rule' | 'manual_override';
@@ -415,11 +416,13 @@ export function RunRulesPage() {
                           <td className="px-2 py-1.5 font-mono text-[12px] tabular-nums text-gray-600">
                             {formatDate(row.date)}
                           </td>
-                          <td
-                            className="max-w-[280px] truncate px-2 py-1.5 text-gray-800"
-                            title={row.description}
-                          >
-                            {row.description}
+                          <td className="max-w-[280px] px-2 py-1.5 text-gray-800">
+                            <div className="group flex min-w-0 items-center gap-2">
+                              <span className="min-w-0 flex-1 truncate" title={row.description}>
+                                {row.description}
+                              </span>
+                              <DescriptionSearchLink description={row.description} />
+                            </div>
                           </td>
                           <td
                             className={`px-2 py-1.5 text-right font-mono text-sm tabular-nums ${

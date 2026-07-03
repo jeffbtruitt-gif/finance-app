@@ -36,6 +36,7 @@ import { CategorizeModal } from './CategorizeModal';
 import { MakeRuleModal } from './MakeRuleModal';
 import { TransactionCategoryCell } from './TransactionCategoryCell';
 import { TransactionTripPlaneIcon } from './TransactionTripPlaneIcon';
+import { DescriptionSearchLink } from './DescriptionSearchLink';
 import { TransactionPropertiesDrawer } from './TransactionPropertiesDrawer';
 import { accountStripeHex } from './txAccountColor';
 import { ColumnFilterPopover } from './ColumnFilterPopover';
@@ -373,7 +374,7 @@ export function TransactionsPage() {
         const r = row.original;
         const showRule = !!(r.categorization_rule_id || r.categorization_source === 'rule');
         return (
-          <div className="flex min-w-0 max-w-full items-center gap-2">
+          <div className="group flex min-w-0 max-w-full items-center gap-2">
             <span className="min-w-0 flex-1 truncate font-semibold text-navy-900">
               {r.description}
             </span>
@@ -382,6 +383,7 @@ export function TransactionsPage() {
                 rule
               </Badge>
             )}
+            <DescriptionSearchLink description={r.description} />
           </div>
         );
       },

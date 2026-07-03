@@ -9,7 +9,8 @@ import {
   fetchTransactions,
   type CategoryOption,
 } from '@/api/transactions';
-import { applyBulkAction, listRules, updateRule } from '@/api/phase2';
+import { applyBulkAction, applyCategorizations, listRules, loadScope, updateRule } from '@/api/phase2';
+import { computeDryRun } from '@/features/rules/dryRun';
 import { fetchReviewQueue, fetchHistoryHints, merchantToken } from '@/api/review';
 import { categoryColorHex } from '@/components/ds/CategoryChip';
 import { accountStripeHex } from '@/pages/transactions/txAccountColor';
@@ -636,10 +637,10 @@ function TabStrip({ tab, setTab, reviewCount }: { tab: Tab; setTab: (t: Tab) => 
 // ── Frozen page header (title + tab strip) ────────────────────────────────────
 
 function PageHeader({
-  tab, setTab, reviewCount, subtitle, onNewRule,
+  tab, setTab, reviewCount, subtitle, onNewRule, onRunRules, runningRules,
 }: {
   tab: Tab; setTab: (t: Tab) => void; reviewCount: number;
-  subtitle?: string; onNewRule: () => void;
+  subtitle?: string; onNewRule: () => void; onRunRules: () => void; runningRules?: boolean;
 }) {
   const titles: Record<Tab, string> = { '1mo': 'Budget', review: 'Review', tx: 'Transactions', rules: 'Rules' };
   return (
@@ -657,15 +658,27 @@ function PageHeader({
             )}
           </div>
           {tab === 'rules' && (
-            <button
-              onClick={onNewRule}
-              style={{ marginTop: 4, padding: '7px 14px', borderRadius: 10, background: '#0d1527', color: '#fff', border: 'none', fontFamily: "'Figtree', system-ui", fontSize: 13, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}
-            >
-              <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
-                <path d="M8 2v12M2 8h12" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-              </svg>
-              New rule
-            </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4, flexShrink: 0 }}>
+              <button
+                onClick={onRunRules}
+                disabled={runningRules}
+                style={{ padding: '7px 14px', borderRadius: 10, background: '#fff', color: '#0d1527', border: '1px solid #d7dae4', fontFamily: "'Figtree', system-ui", fontSize: 13, fontWeight: 600, cursor: runningRules ? 'default' : 'pointer', opacity: runningRules ? 0.6 : 1, display: 'flex', alignItems: 'center', gap: 6 }}
+              >
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+                  <path d="M4 2.5v11l10-5.5-10-5.5z" fill="currentColor" />
+                </svg>
+                {runningRules ? 'Running…' : 'Run rules'}
+              </button>
+              <button
+                onClick={onNewRule}
+                style={{ padding: '7px 14px', borderRadius: 10, background: '#0d1527', color: '#fff', border: 'none', fontFamily: "'Figtree', system-ui", fontSize: 13, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
+              >
+                <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+                  <path d="M8 2v12M2 8h12" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                </svg>
+                New rule
+              </button>
+            </div>
           )}
         </div>
       )}
@@ -821,6 +834,37 @@ export function MobileApp() {
   const rules = rulesQ.data ?? [];
   const allTx = allTxQ.data?.rows ?? [];
 
+  const runRulesMut = useMutation({
+    mutationFn: async () => {
+      if (!hid || !sid) return 0;
+      const scopeData = await loadScope(hid, { kind: 'uncategorized', scheme_id: sid });
+      const category_names = new Map(categories.map(c => [c.id, c.name]));
+      const dryRun = computeDryRun({
+        rules,
+        scope_transactions: scopeData.transactions,
+        category_names,
+      });
+      // Scope is "uncategorized", so every matched row starts with no
+      // category — nothing here can overwrite a manual selection.
+      const assignments = dryRun.rows.map(r => ({
+        transaction_id: r.transaction_id,
+        category_id: r.proposed_category_id,
+        source: 'rule' as const,
+        rule_id: r.matched_rule_id,
+      }));
+      if (assignments.length > 0) {
+        await applyCategorizations({ scheme_id: sid, assignments });
+      }
+      return assignments.length;
+    },
+    onSuccess: (count) => {
+      qc.invalidateQueries({ queryKey: ['review-queue'] });
+      qc.invalidateQueries({ queryKey: ['all-tx-mobile'] });
+      showToast(count > 0 ? `Categorized ${count} transaction${count === 1 ? '' : 's'}` : 'No matches found');
+    },
+    onError: () => showToast('Error running rules'),
+  });
+
   const isLoading = !sid || reviewQ.isLoading;
 
   if (isLoading) {
@@ -846,6 +890,8 @@ export function MobileApp() {
         reviewCount={visibleQueue.length}
         subtitle={tab === 'review' ? reviewSubtitle : undefined}
         onNewRule={() => { setMakeRuleSeed(null); setMakeRuleOpen(true); }}
+        onRunRules={() => runRulesMut.mutate()}
+        runningRules={runRulesMut.isPending}
       />
 
       {/* Scrollable content */}
@@ -904,6 +950,7 @@ export function MobileApp() {
         accounts={accounts}
         onCreated={() => {
           qc.invalidateQueries({ queryKey: ['rules', sid] });
+          qc.invalidateQueries({ queryKey: ['review-queue'] });
           showToast('Rule created');
         }}
         toast={showToast}

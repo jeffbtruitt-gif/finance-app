@@ -4,7 +4,7 @@ import { Button, CategoryChip } from '@/components/ds';
 import { formatMoney } from '@/lib/money';
 import type { TransactionRow } from '@/types';
 import type { RuleCondition } from '@/types/phase2';
-import { createRule } from '@/api/phase2';
+import { applyBulkAction, createRule } from '@/api/phase2';
 import {
   backfillUncategorizedByDescriptionMatch,
   type CategoryOption,
@@ -117,6 +117,13 @@ export function MakeRuleModal(props: {
         name: `Rule: ${pattern.trim().slice(0, 40)}`,
         conditions: conds,
         action_category_id: categoryId,
+      });
+      // Always categorize the seed transaction itself, regardless of the
+      // "apply to history" / match-type settings below, so it immediately
+      // drops out of the review queue and can't spawn a duplicate rule.
+      await applyBulkAction(schemeId, [seed.id], {
+        type: 'set_category',
+        category_id: categoryId,
       });
       if (applyHistory && matchType !== 'regex') {
         await backfillUncategorizedByDescriptionMatch({
