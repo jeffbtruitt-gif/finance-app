@@ -645,43 +645,41 @@ function PageHeader({
   const titles: Record<Tab, string> = { '1mo': 'Budget', review: 'Review', tx: 'Transactions', rules: 'Rules' };
   return (
     <div style={{ flexShrink: 0, background: '#fff', borderBottom: '1px solid #eef0f7' }}>
-      {tab !== '1mo' && (
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', padding: '14px 20px 6px' }}>
-          <div>
-            <div style={{ fontFamily: "'Figtree', system-ui", fontWeight: 800, fontSize: 26, color: '#0d1527', letterSpacing: '-0.02em' }}>
-              {titles[tab]}
-            </div>
-            {subtitle && (
-              <div style={{ fontFamily: "'Figtree', system-ui", fontSize: 13, color: '#7a8196', marginTop: 3 }}>
-                {subtitle}
-              </div>
-            )}
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', padding: '14px 20px 6px' }}>
+        <div>
+          <div style={{ fontFamily: "'Figtree', system-ui", fontWeight: 800, fontSize: 26, color: '#0d1527', letterSpacing: '-0.02em' }}>
+            {titles[tab]}
           </div>
-          {tab === 'rules' && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4, flexShrink: 0 }}>
-              <button
-                onClick={onRunRules}
-                disabled={runningRules}
-                style={{ padding: '7px 14px', borderRadius: 10, background: '#fff', color: '#0d1527', border: '1px solid #d7dae4', fontFamily: "'Figtree', system-ui", fontSize: 13, fontWeight: 600, cursor: runningRules ? 'default' : 'pointer', opacity: runningRules ? 0.6 : 1, display: 'flex', alignItems: 'center', gap: 6 }}
-              >
-                <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
-                  <path d="M4 2.5v11l10-5.5-10-5.5z" fill="currentColor" />
-                </svg>
-                {runningRules ? 'Running…' : 'Run rules'}
-              </button>
-              <button
-                onClick={onNewRule}
-                style={{ padding: '7px 14px', borderRadius: 10, background: '#0d1527', color: '#fff', border: 'none', fontFamily: "'Figtree', system-ui", fontSize: 13, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
-              >
-                <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
-                  <path d="M8 2v12M2 8h12" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-                </svg>
-                New rule
-              </button>
+          {subtitle && (
+            <div style={{ fontFamily: "'Figtree', system-ui", fontSize: 13, color: '#7a8196', marginTop: 3 }}>
+              {subtitle}
             </div>
           )}
         </div>
-      )}
+        {tab === 'rules' && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4, flexShrink: 0 }}>
+            <button
+              onClick={onRunRules}
+              disabled={runningRules}
+              style={{ padding: '7px 14px', borderRadius: 10, background: '#fff', color: '#0d1527', border: '1px solid #d7dae4', fontFamily: "'Figtree', system-ui", fontSize: 13, fontWeight: 600, cursor: runningRules ? 'default' : 'pointer', opacity: runningRules ? 0.6 : 1, display: 'flex', alignItems: 'center', gap: 6 }}
+            >
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+                <path d="M4 2.5v11l10-5.5-10-5.5z" fill="currentColor" />
+              </svg>
+              {runningRules ? 'Running…' : 'Run rules'}
+            </button>
+            <button
+              onClick={onNewRule}
+              style={{ padding: '7px 14px', borderRadius: 10, background: '#0d1527', color: '#fff', border: 'none', fontFamily: "'Figtree', system-ui", fontSize: 13, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
+            >
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+                <path d="M8 2v12M2 8h12" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+              </svg>
+              New rule
+            </button>
+          </div>
+        )}
+      </div>
       <TabStrip tab={tab} setTab={setTab} reviewCount={reviewCount} />
     </div>
   );
