@@ -15,6 +15,7 @@ import { fetchReviewQueue, fetchHistoryHints, merchantToken } from '@/api/review
 import { categoryColorHex } from '@/components/ds/CategoryChip';
 import { accountStripeHex } from '@/pages/transactions/txAccountColor';
 import { MakeRuleModal } from '@/pages/transactions/MakeRuleModal';
+import { DescriptionSearchLink } from '@/pages/transactions/DescriptionSearchLink';
 import type { TransactionRow } from '@/types';
 import type { Rule } from '@/types/phase2';
 
@@ -166,6 +167,12 @@ function CategorizeSheet({ tx, categories, onApply, onClose }: SheetProps) {
             <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 15, fontWeight: 700, color: tx.amount < 0 ? '#1e7e5a' : '#0d1527' }}>
               {fmtAmt(tx.amount)}
             </span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginTop: 8 }}>
+            <div style={{ flex: 1, minWidth: 0, fontFamily: "'Figtree', system-ui", fontSize: 12, color: '#374151', lineHeight: 1.4, wordBreak: 'break-word' }}>
+              {tx.description}
+            </div>
+            <DescriptionSearchLink description={tx.description} variant="inline" className="!h-6 !w-6 shrink-0" />
           </div>
         </div>
 
