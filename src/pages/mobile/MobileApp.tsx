@@ -272,6 +272,108 @@ function CategorizeSheet({ tx, categories, onApply, onClose }: SheetProps) {
   );
 }
 
+// ── TransactionDetailSheet ────────────────────────────────────────────────────
+
+interface DetailSheetProps {
+  tx: TransactionRow;
+  onClose: () => void;
+  onCategorize: () => void;
+  onNewRule: () => void;
+}
+
+function TransactionDetailSheet({ tx, onClose, onCategorize, onNewRule }: DetailSheetProps) {
+  return (
+    <>
+      {/* Backdrop */}
+      <div
+        onClick={onClose}
+        style={{ position: 'absolute', inset: 0, background: 'rgba(13,21,39,0.45)', zIndex: 60 }}
+      />
+      {/* Sheet */}
+      <div
+        className="mobile-sheet"
+        style={{
+          position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 70,
+          background: '#fff', borderRadius: '24px 24px 0 0',
+          maxHeight: '82%', display: 'flex', flexDirection: 'column',
+          boxShadow: '0 -4px 40px rgba(13,21,39,0.15)',
+        }}
+      >
+        {/* Handle */}
+        <div style={{ display: 'flex', justifyContent: 'center', padding: '12px 0 0' }}>
+          <div style={{ width: 36, height: 4, borderRadius: 2, background: '#e2e5ee' }} />
+        </div>
+
+        <div style={{ padding: '14px 20px 4px', overflowY: 'auto' }}>
+          <div style={{ fontFamily: "'Figtree', system-ui", fontWeight: 700, fontSize: 17, color: '#0d1527', marginBottom: 12 }}>
+            Transaction
+          </div>
+
+          {/* Account · date · amount */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <Avatar accountId={tx.account_id} name={tx.account_name} size={38} />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontFamily: "'Figtree', system-ui", fontSize: 13, fontWeight: 600, color: '#0d1527' }}>
+                {tx.account_name}
+              </div>
+              <div style={{ fontSize: 12, color: '#9aa0af', marginTop: 1 }}>
+                {fmtDate(tx.date)}
+              </div>
+            </div>
+            <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 18, fontWeight: 700, color: tx.amount < 0 ? '#1e7e5a' : '#0d1527', flexShrink: 0 }}>
+              {fmtAmt(tx.amount)}
+            </span>
+          </div>
+
+          {/* Full description */}
+          <div style={{ marginTop: 16, padding: '12px 14px', background: '#f8f9fc', borderRadius: 12, border: '1px solid #eef0f7' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+              <div style={{ fontFamily: "'Figtree', system-ui", fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', color: '#9aa0af', textTransform: 'uppercase' }}>
+                Description
+              </div>
+              <DescriptionSearchLink description={tx.description} variant="inline" />
+            </div>
+            <div style={{ marginTop: 6, fontFamily: "'JetBrains Mono', monospace", fontSize: 13.5, color: '#0d1527', lineHeight: 1.5, wordBreak: 'break-word' }}>
+              {tx.description}
+            </div>
+          </div>
+
+          {/* Category */}
+          <div style={{ marginTop: 14, marginBottom: 4 }}>
+            <div style={{ fontFamily: "'Figtree', system-ui", fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', color: '#9aa0af', textTransform: 'uppercase', marginBottom: 6 }}>
+              Category
+            </div>
+            <CatPill name={tx.category_name} />
+          </div>
+        </div>
+
+        {/* Actions */}
+        <div style={{ padding: '14px 20px 24px', borderTop: '1px solid #f0f2f6', display: 'flex', gap: 8 }}>
+          <button
+            onClick={onCategorize}
+            style={{ flex: 1, padding: '11px 0', borderRadius: 12, background: '#f4f5fb', border: '1.5px solid #e8eaf4', color: '#0d1527', fontFamily: "'Figtree', system-ui", fontSize: 13.5, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+          >
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+              <path d="M2.2 2.2H7l6.6 6.6a1.2 1.2 0 010 1.7l-3.1 3.1a1.2 1.2 0 01-1.7 0L2.2 7V2.2z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+              <circle cx="5.2" cy="5.2" r="1.05" fill="currentColor" />
+            </svg>
+            Categorize
+          </button>
+          <button
+            onClick={onNewRule}
+            style={{ flex: 1, padding: '11px 0', borderRadius: 12, background: '#f4f5fb', border: '1.5px solid #e8eaf4', color: '#0d1527', fontFamily: "'Figtree', system-ui", fontSize: 13.5, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+          >
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+              <path d="M9.5 1.5L3 9h5l-1.5 5.5L14 7h-5l0.5-5.5z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" />
+            </svg>
+            New rule
+          </button>
+        </div>
+      </div>
+    </>
+  );
+}
+
 // ── Review screen ─────────────────────────────────────────────────────────────
 
 interface ReviewScreenProps {
@@ -283,9 +385,10 @@ interface ReviewScreenProps {
   onApplyHint: (tx: TransactionRow, catId: string, catName: string) => void;
   onCategorize: (tx: TransactionRow) => void;
   onNewRule: (tx: TransactionRow) => void;
+  onOpenDetail: (tx: TransactionRow) => void;
 }
 
-function ReviewScreen({ queue, localCats, hints, categories, initialTotal, onApplyHint, onCategorize, onNewRule }: ReviewScreenProps) {
+function ReviewScreen({ queue, localCats, hints, categories, initialTotal, onApplyHint, onCategorize, onNewRule, onOpenDetail }: ReviewScreenProps) {
   const visible = queue.filter(tx => !localCats.has(tx.id));
   const done = initialTotal - visible.length;
   const pct = initialTotal > 0 ? (done / initialTotal) * 100 : 0;
@@ -358,12 +461,15 @@ function ReviewScreen({ queue, localCats, hints, categories, initialTotal, onApp
                 key={tx.id}
                 style={{ margin: '0 16px 10px', background: '#fff', borderRadius: 16, overflow: 'hidden', boxShadow: '0 1px 8px rgba(13,21,39,0.07), 0 0 0 1px #eef0f7' }}
               >
-                {/* Card header */}
-                <div style={{ padding: '14px 16px 10px', display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+                {/* Card header — tap to view full transaction */}
+                <div
+                  onClick={() => onOpenDetail(tx)}
+                  style={{ padding: '14px 16px 10px', display: 'flex', alignItems: 'flex-start', gap: 12, cursor: 'pointer' }}
+                >
                   <Avatar accountId={tx.account_id} name={tx.account_name} />
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, fontWeight: 700, color: '#0d1527', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {token}
+                      {tx.description}
                     </div>
                     <div style={{ fontSize: 11, color: '#9aa0af', marginTop: 3 }}>
                       {tx.account_name} · {fmtDate(date)}
@@ -430,10 +536,10 @@ function ReviewScreen({ queue, localCats, hints, categories, initialTotal, onApp
 interface TxScreenProps {
   txs: TransactionRow[];
   localCats: Map<string, { id: string; name: string }>;
-  onCategorize: (tx: TransactionRow) => void;
+  onOpenDetail: (tx: TransactionRow) => void;
 }
 
-function TxScreen({ txs, localCats, onCategorize }: TxScreenProps) {
+function TxScreen({ txs, localCats, onOpenDetail }: TxScreenProps) {
   const [search, setSearch] = useState('');
 
   const overlaid = useMemo(() =>
@@ -488,7 +594,7 @@ function TxScreen({ txs, localCats, onCategorize }: TxScreenProps) {
             {dateTxs.map(tx => (
               <button
                 key={tx.id}
-                onClick={() => onCategorize(tx)}
+                onClick={() => onOpenDetail(tx)}
                 style={{
                   width: '100%', display: 'flex', alignItems: 'center', gap: 12,
                   padding: '10px 16px', background: 'transparent', border: 'none',
@@ -498,7 +604,7 @@ function TxScreen({ txs, localCats, onCategorize }: TxScreenProps) {
                 <Avatar accountId={tx.account_id} name={tx.account_name} size={36} />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 700, color: '#0d1527', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {merchantToken(tx.description)}
+                    {tx.description}
                   </div>
                   <div style={{ marginTop: 3 }}>
                     <CatPill name={tx.category_name} />
@@ -773,6 +879,7 @@ export function MobileApp() {
   const [localCats, setLocalCats] = useState<Map<string, { id: string; name: string }>>(new Map());
   const [initialTotal, setInitialTotal] = useState<number | null>(null);
   const [sheetTx, setSheetTx] = useState<TransactionRow | null>(null);
+  const [detailTx, setDetailTx] = useState<TransactionRow | null>(null);
   const [makeRuleOpen, setMakeRuleOpen] = useState(false);
   const [makeRuleSeed, setMakeRuleSeed] = useState<TransactionRow | null>(null);
   const [toast, setToast] = useState<string | null>(null);
@@ -914,19 +1021,30 @@ export function MobileApp() {
             onApplyHint={handleApplyHint}
             onCategorize={tx => setSheetTx(tx)}
             onNewRule={tx => { setMakeRuleSeed(tx); setMakeRuleOpen(true); }}
+            onOpenDetail={tx => setDetailTx(tx)}
           />
         )}
         {tab === 'tx' && (
           <TxScreen
             txs={allTx}
             localCats={localCats}
-            onCategorize={tx => setSheetTx(tx)}
+            onOpenDetail={tx => setDetailTx(tx)}
           />
         )}
         {tab === 'rules' && (
           <RulesScreen
             rules={rules}
             onToggle={rule => toggleMutation.mutate(rule)}
+          />
+        )}
+
+        {/* Transaction detail sheet */}
+        {detailTx && (
+          <TransactionDetailSheet
+            tx={detailTx}
+            onClose={() => setDetailTx(null)}
+            onCategorize={() => { setSheetTx(detailTx); setDetailTx(null); }}
+            onNewRule={() => { setMakeRuleSeed(detailTx); setMakeRuleOpen(true); setDetailTx(null); }}
           />
         )}
 

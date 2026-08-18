@@ -136,14 +136,6 @@ export function getPageMeta(pathname: string, period?: Period): PageMeta {
       },
       { pattern: '/college', meta: { title: 'College', description: 'Education funding projections.' } },
       {
-        pattern: '/review',
-        meta: {
-          title: 'Review',
-          description:
-            'Transactions that no active rule matched — categorize them one-off or create a rule to handle future matches automatically.',
-        },
-      },
-      {
         pattern: '/import',
         meta: {
           title: 'Import Data',
