@@ -166,30 +166,18 @@ export function YtdReportPage() {
               {report.sections.map((section) => (
                 <Fragment key={section.group}>
                   {section.group === 'Yearly' && preYearlyTotals && (
-                    <tr className={RT.subtotalRow}>
-                      <td className={RT.cellLeft}>Total before Yearly</td>
-                      <td className={RT.cellRight}>{fmtUsd(preYearlyTotals.actual)}</td>
-                      <td className={RT.cellRight}>{fmtUsd(preYearlyTotals.budget)}</td>
-                      <td
-                        className={`${RT.cellRight} ${varianceClass(
-                          variance(preYearlyTotals.actual, preYearlyTotals.budget),
-                        )}`}
-                      >
+                    <tr className={RT.totalRow}>
+                      <td className={RT.totalCell}>Total before Yearly</td>
+                      <td className={RT.totalCellRight}>{fmtUsd(preYearlyTotals.actual)}</td>
+                      <td className={RT.totalCellRight}>{fmtUsd(preYearlyTotals.budget)}</td>
+                      <td className={RT.totalCellRight}>
                         {fmtUsd(variance(preYearlyTotals.actual, preYearlyTotals.budget))}
                       </td>
-                      <td
-                        className={`${RT.cellRight} ${varianceClass(
-                          variance(preYearlyTotals.actual, preYearlyTotals.budget),
-                        )}`}
-                      >
+                      <td className={RT.totalCellRight}>
                         {fmtPct(variancePct(preYearlyTotals.actual, preYearlyTotals.budget))}
                       </td>
-                      <td className={RT.cellRightMuted}>{fmtUsd(preYearlyTotals.actualB)}</td>
-                      <td
-                        className={`${RT.cellRight} ${varianceClass(
-                          preYearlyTotals.actual - preYearlyTotals.actualB,
-                        )}`}
-                      >
+                      <td className={RT.totalCellRight}>{fmtUsd(preYearlyTotals.actualB)}</td>
+                      <td className={RT.totalCellRight}>
                         {fmtPct(variancePct(preYearlyTotals.actual, preYearlyTotals.actualB))}
                       </td>
                     </tr>
