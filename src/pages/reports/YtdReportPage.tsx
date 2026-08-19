@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { Fragment, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useHousehold } from '@/api/household';
 import {
@@ -110,6 +110,18 @@ export function YtdReportPage() {
       report.grandBudget !== 0 ||
       (report.grandActualB ?? 0) !== 0);
 
+  const preYearlyTotals = useMemo(() => {
+    if (!report) return null;
+    const idx = report.sections.findIndex((s) => s.group === 'Yearly');
+    if (idx < 0) return null;
+    const pre = report.sections.slice(0, idx);
+    return {
+      actual: pre.reduce((sum, s) => sum + s.actualTotal, 0),
+      budget: pre.reduce((sum, s) => sum + s.budgetTotal, 0),
+      actualB: pre.reduce((sum, s) => sum + (s.actualBTotal ?? 0), 0),
+    };
+  }, [report]);
+
   return (
     <div>
       <p className="mb-4 text-sm text-gray-600">
@@ -152,7 +164,38 @@ export function YtdReportPage() {
             </thead>
             <tbody>
               {report.sections.map((section) => (
-                <YtdSection key={section.group} section={section} />
+                <Fragment key={section.group}>
+                  {section.group === 'Yearly' && preYearlyTotals && (
+                    <tr className={RT.subtotalRow}>
+                      <td className={RT.cellLeft}>Total before Yearly</td>
+                      <td className={RT.cellRight}>{fmtUsd(preYearlyTotals.actual)}</td>
+                      <td className={RT.cellRight}>{fmtUsd(preYearlyTotals.budget)}</td>
+                      <td
+                        className={`${RT.cellRight} ${varianceClass(
+                          variance(preYearlyTotals.actual, preYearlyTotals.budget),
+                        )}`}
+                      >
+                        {fmtUsd(variance(preYearlyTotals.actual, preYearlyTotals.budget))}
+                      </td>
+                      <td
+                        className={`${RT.cellRight} ${varianceClass(
+                          variance(preYearlyTotals.actual, preYearlyTotals.budget),
+                        )}`}
+                      >
+                        {fmtPct(variancePct(preYearlyTotals.actual, preYearlyTotals.budget))}
+                      </td>
+                      <td className={RT.cellRightMuted}>{fmtUsd(preYearlyTotals.actualB)}</td>
+                      <td
+                        className={`${RT.cellRight} ${varianceClass(
+                          preYearlyTotals.actual - preYearlyTotals.actualB,
+                        )}`}
+                      >
+                        {fmtPct(variancePct(preYearlyTotals.actual, preYearlyTotals.actualB))}
+                      </td>
+                    </tr>
+                  )}
+                  <YtdSection section={section} />
+                </Fragment>
               ))}
               <tr className={RT.totalRow}>
                 <td className={RT.totalCell}>Total Spend YTD</td>
