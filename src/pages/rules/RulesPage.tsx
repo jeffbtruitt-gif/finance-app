@@ -95,6 +95,8 @@ export function RulesPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [draggedId, setDraggedId] = useState<string | null>(null);
+  const [dragOverId, setDragOverId] = useState<string | null>(null);
 
   const categoryNameById = (id: string) =>
     categoriesQuery.data?.find((c) => c.id === id)?.name ?? '(unknown)';
@@ -178,6 +180,20 @@ export function RulesPage() {
     const swap = idx + dir;
     if (swap < 0 || swap >= arr.length) return;
     [arr[idx], arr[swap]] = [arr[swap], arr[idx]];
+    reorderMut.mutate(arr.map((r) => r.id));
+  }
+
+  function dropRuleOnto(targetId: string) {
+    const fromId = draggedId;
+    setDraggedId(null);
+    setDragOverId(null);
+    if (!fromId || fromId === targetId) return;
+    const arr = [...orderedRules];
+    const fromIdx = arr.findIndex((r) => r.id === fromId);
+    const toIdx = arr.findIndex((r) => r.id === targetId);
+    if (fromIdx < 0 || toIdx < 0) return;
+    const [moved] = arr.splice(fromIdx, 1);
+    arr.splice(toIdx, 0, moved);
     reorderMut.mutate(arr.map((r) => r.id));
   }
 
@@ -412,6 +428,15 @@ export function RulesPage() {
                           }
                           onDelete={() => {
                             if (confirm(`Delete rule "${rule.name}"?`)) deleteMut.mutate(rule.id);
+                          }}
+                          isDragging={draggedId === rule.id}
+                          isDropTarget={dragOverId === rule.id && draggedId !== rule.id}
+                          onDragStart={() => setDraggedId(rule.id)}
+                          onDragOverRow={() => draggedId && setDragOverId(rule.id)}
+                          onDropRow={() => dropRuleOnto(rule.id)}
+                          onDragEnd={() => {
+                            setDraggedId(null);
+                            setDragOverId(null);
                           }}
                         />
                         {expandedId === rule.id && (

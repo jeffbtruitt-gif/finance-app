@@ -16,6 +16,12 @@ export function RuleRow(props: {
   onMove: (dir: -1 | 1) => void;
   onToggleActive: () => void;
   onDelete: () => void;
+  isDragging?: boolean;
+  isDropTarget?: boolean;
+  onDragStart?: () => void;
+  onDragOverRow?: () => void;
+  onDropRow?: () => void;
+  onDragEnd?: () => void;
 }) {
   const {
     rule,
@@ -30,15 +36,33 @@ export function RuleRow(props: {
     onMove,
     onToggleActive,
     onDelete,
+    isDragging,
+    isDropTarget,
+    onDragStart,
+    onDragOverRow,
+    onDropRow,
+    onDragEnd,
   } = props;
 
   const idxLabel = String(index + 1).padStart(2, '0');
 
   return (
     <div
+      onDragOver={(e) => {
+        if (!onDragOverRow) return;
+        e.preventDefault();
+        onDragOverRow();
+      }}
+      onDrop={(e) => {
+        if (!onDropRow) return;
+        e.preventDefault();
+        onDropRow();
+      }}
       className={`group relative border-b border-navy-100 transition-colors last:border-b-0 ${
         expanded ? 'bg-navy-50/60' : selected ? 'bg-navy-50/40' : 'bg-white hover:bg-gray-50'
-      } ${rule.is_active ? '' : 'opacity-60'}`}
+      } ${rule.is_active ? '' : 'opacity-60'} ${isDragging ? 'opacity-40' : ''} ${
+        isDropTarget ? 'border-t-2 border-t-navy-500' : ''
+      }`}
     >
       <div className="flex items-center gap-3 px-4 py-3">
         <div className="flex flex-col items-center gap-0.5">
@@ -51,7 +75,19 @@ export function RuleRow(props: {
           >
             ▲
           </button>
-          <IconDrag className="cursor-grab text-gray-300 group-hover:text-navy-700" />
+          <span
+            draggable
+            onDragStart={(e) => {
+              e.dataTransfer.effectAllowed = 'move';
+              onDragStart?.();
+            }}
+            onDragEnd={() => onDragEnd?.()}
+            aria-label={`Drag to reorder rule ${rule.name}`}
+            title="Drag to reorder"
+            className="cursor-grab touch-none text-gray-300 hover:text-navy-700 active:cursor-grabbing"
+          >
+            <IconDrag className="group-hover:text-navy-700" />
+          </span>
           <button
             type="button"
             aria-label="Move rule down"
