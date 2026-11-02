@@ -15,6 +15,7 @@ import { useHousehold, useUser, type Household } from '@/api/household';
 import { detectFromCsv, parseRows } from '../features/import/parsers';
 import { dedupeHash, dedupeHashMany } from '../lib/dedupe';
 import { matchTrips } from '../features/trips/matcher';
+import { runRulesOnUncategorized } from '../features/rules/runRulesOnUncategorized';
 import {
   findExistingTransactions,
   commitImport,
@@ -981,12 +982,29 @@ export function ImportPage() {
         });
         batchIds.push(batch_id);
       }
+
+      // Auto-run the rules on everything still uncategorized so the user
+      // doesn't have to create a duplicate rule for something already covered.
+      // Best-effort: a failure here must not fail an import that already
+      // committed.
+      if (batchIds.length > 0) {
+        try {
+          const schemeId = await queryClient.fetchQuery({
+            queryKey: defaultSchemeQueryKey(household.id),
+            queryFn: () => fetchDefaultSchemeId(household.id),
+          });
+          await runRulesOnUncategorized(household.id, schemeId);
+        } catch (err) {
+          console.error('Auto-run rules after import failed', err);
+        }
+      }
       return { batchIds };
     },
     onMutate: () => setCommitting(true),
     onSettled: () => setCommitting(false),
     onSuccess: ({ batchIds }) => {
       queryClient.invalidateQueries({ queryKey: ['transactions'] });
+      queryClient.invalidateQueries({ queryKey: ['transaction_categories'] });
       queryClient.invalidateQueries({
         queryKey: ['latest-actual-period-global'],
       });

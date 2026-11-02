@@ -60,31 +60,37 @@ export async function findExistingTransactions(
   const SELECT_COLS =
     'id, date, description, amount, external_id, dedupe_hash, account_id, imported_at';
 
+  // These `in` filters travel in the request URL, so chunk by URL length, not
+  // row count: 64-char hashes at 500 per chunk (~33KB) get a 400 Bad Request.
+  const CHUNK = 100;
+
   if (external_ids.length > 0) {
-    const { data, error } = await supabase
-      .from('tf_transactions')
-      .select(SELECT_COLS)
-      .eq('household_id', household_id)
-      .eq('account_id', account_id)
-      .in('external_id', external_ids);
-    if (error) throw error;
-    for (const row of (data ?? []) as ExistingTxnMatch[]) {
-      if (row.external_id) {
-        existing_external_ids.add(row.external_id);
-        matchesByExternalId.set(row.external_id, {
-          ...row,
-          amount: Number(row.amount),
-        });
+    const uniqueExternalIds = Array.from(new Set(external_ids));
+    for (let i = 0; i < uniqueExternalIds.length; i += CHUNK) {
+      const slice = uniqueExternalIds.slice(i, i + CHUNK);
+      const { data, error } = await supabase
+        .from('tf_transactions')
+        .select(SELECT_COLS)
+        .eq('household_id', household_id)
+        .eq('account_id', account_id)
+        .in('external_id', slice);
+      if (error) throw error;
+      for (const row of (data ?? []) as ExistingTxnMatch[]) {
+        if (row.external_id) {
+          existing_external_ids.add(row.external_id);
+          matchesByExternalId.set(row.external_id, {
+            ...row,
+            amount: Number(row.amount),
+          });
+        }
       }
     }
   }
 
   if (hashes.length > 0) {
-    // Postgres `in` clause has practical limits (~1000); chunk for safety.
     // We dedupe the slice to keep the query small when many parsed rows
     // share the same hash (within-file collisions).
     const uniqueHashes = Array.from(new Set(hashes));
-    const CHUNK = 500;
     for (let i = 0; i < uniqueHashes.length; i += CHUNK) {
       const slice = uniqueHashes.slice(i, i + CHUNK);
       const { data, error } = await supabase
