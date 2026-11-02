@@ -13,6 +13,13 @@ export function parseSlashedDate4(input: string): string {
   return `${y}-${mo.padStart(2, '0')}-${d.padStart(2, '0')}`;
 }
 
+/** YYYY-MM-DD passthrough, validated. Throws on bad input. */
+export function parseIsoDate(input: string): string {
+  const m = input.trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) throw new Error(`Invalid YYYY-MM-DD date: "${input}"`);
+  return m[0];
+}
+
 /** MM/DD/YY → YYYY-MM-DD. Assumes 20YY for two-digit years. */
 export function parseSlashedDate2(input: string): string {
   const m = input.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{2})$/);
