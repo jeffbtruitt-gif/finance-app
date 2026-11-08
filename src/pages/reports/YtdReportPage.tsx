@@ -1,4 +1,4 @@
-import { Fragment, useMemo } from 'react';
+import { Fragment, useCallback, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useHousehold } from '@/api/household';
 import {
@@ -7,6 +7,7 @@ import {
   fetchMonthlyActuals,
   fetchBudgetYear,
   fetchSchemeCategories,
+  fetchReportShellTransactions,
   actualsToLookup,
   budgetsToLookup,
 } from '@/api/reports';
@@ -18,14 +19,29 @@ import {
   fmtPct,
   varianceClass,
 } from '@/lib/money';
-import { formatPeriod, ytdPeriods, type Period } from '@/lib/period';
+import { formatPeriod, periodEndIso, yearStartIso, ytdPeriods, type Period } from '@/lib/period';
 import { useAppPeriod } from '@/lib/appPeriodContext';
 import { StatusPanel } from '@/components/StatusPanel';
 import { Card, RT } from '@/components/ds';
+import { TransactionPropertiesDrawer } from '@/pages/transactions/TransactionPropertiesDrawer';
+import {
+  ReportDrillDetail,
+  ReportTabButton,
+  filterDrillTransactions,
+  type DrillState,
+} from '@/pages/reports/ReportDrillDetail';
+
+type DrillHandlers = {
+  onDrillCategory: (id: string, name: string) => void;
+  onDrillGroup: (drillKey: string, displayLabel: string) => void;
+};
 
 export function YtdReportPage() {
   const household = useHousehold();
   const { period } = useAppPeriod();
+  const [tab, setTab] = useState<'table' | 'detail'>('table');
+  const [drill, setDrill] = useState<DrillState>(null);
+  const [detailTxnId, setDetailTxnId] = useState<string | null>(null);
 
   const schemeQ = useQuery({
     queryKey: defaultSchemeQueryKey(household?.id),
@@ -79,6 +95,31 @@ export function YtdReportPage() {
     queryFn: () => fetchBudgetYear({ household_id: household!.id, year: period.year }),
   });
 
+  // Year-to-date transactions (Jan 1 → end of the selected month) for the Detail tab.
+  const txQ = useQuery({
+    queryKey: ['ytd-report-tx', household?.id, schemeQ.data, period.year, period.month],
+    enabled: !!household?.id && !!schemeQ.data,
+    queryFn: () =>
+      fetchReportShellTransactions({
+        household_id: household!.id,
+        scheme_id: schemeQ.data!,
+        from: yearStartIso(period.year),
+        to: periodEndIso(period),
+      }),
+  });
+
+  const filteredTx = useMemo(() => filterDrillTransactions(txQ.data, drill), [txQ.data, drill]);
+
+  const onDrillCategory = useCallback((id: string, name: string) => {
+    setDrill({ kind: 'category', id, name });
+    setTab('detail');
+  }, []);
+
+  const onDrillGroup = useCallback((drillKey: string, displayLabel: string) => {
+    setDrill({ kind: 'group', key: drillKey, label: displayLabel });
+    setTab('detail');
+  }, []);
+
   const report = useMemo(() => {
     if (!categoriesQ.data || !actualsCYQ.data || !actualsPYQ.data || !budgetQ.data)
       return null;
@@ -124,15 +165,37 @@ export function YtdReportPage() {
 
   return (
     <div>
-      <p className="mb-4 text-sm text-gray-600">
+      <p className="mb-3 text-sm text-gray-600">
         January through{' '}
         <span className="font-semibold text-navy-900">{formatPeriod(period)}</span> vs same
-        period prior year.
+        period prior year. Double-click a category or group to see its transactions.
       </p>
 
-      {loading && <StatusPanel kind="loading" message="Loading…" />}
+      <div className="mb-4 flex gap-1 border-b border-navy-100">
+        <ReportTabButton active={tab === 'table'} onClick={() => setTab('table')}>
+          Table
+        </ReportTabButton>
+        <ReportTabButton active={tab === 'detail'} onClick={() => setTab('detail')} showDot={!!drill}>
+          Detail
+        </ReportTabButton>
+      </div>
 
-      {!loading && firstError && (
+      {tab === 'detail' && (
+        <ReportDrillDetail
+          transactions={filteredTx}
+          isLoading={txQ.isLoading}
+          error={txQ.error}
+          drill={drill}
+          onClearDrill={() => setDrill(null)}
+          onDrillCategory={onDrillCategory}
+          onOpenTransaction={setDetailTxnId}
+          emptyHint="Clear the filter or double-click another category on the Table tab."
+        />
+      )}
+
+      {tab === 'table' && loading && <StatusPanel kind="loading" message="Loading…" />}
+
+      {tab === 'table' && !loading && firstError && (
         <StatusPanel
           kind="error"
           message="Couldn't load the YTD report."
@@ -140,7 +203,7 @@ export function YtdReportPage() {
         />
       )}
 
-      {!loading && !firstError && report && !hasAnyData && (
+      {tab === 'table' && !loading && !firstError && report && !hasAnyData && (
         <StatusPanel
           kind="empty"
           message={`No spend or budget data for Jan – ${formatPeriod(period)}.`}
@@ -148,7 +211,7 @@ export function YtdReportPage() {
         />
       )}
 
-      {!loading && !firstError && report && hasAnyData && (
+      {tab === 'table' && !loading && !firstError && report && hasAnyData && (
         <Card padded={false}>
           <table className={RT.table}>
             <thead className={RT.head}>
@@ -182,7 +245,11 @@ export function YtdReportPage() {
                       </td>
                     </tr>
                   )}
-                  <YtdSection section={section} />
+                  <YtdSection
+                    section={section}
+                    onDrillCategory={onDrillCategory}
+                    onDrillGroup={onDrillGroup}
+                  />
                 </Fragment>
               ))}
               <tr className={RT.totalRow}>
@@ -206,18 +273,31 @@ export function YtdReportPage() {
           </table>
         </Card>
       )}
+
+      <TransactionPropertiesDrawer
+        open={detailTxnId !== null}
+        onClose={() => setDetailTxnId(null)}
+        transactionId={detailTxnId}
+        schemeId={schemeQ.data ?? null}
+      />
     </div>
   );
 }
 
 function YtdSection({
   section,
+  onDrillCategory,
+  onDrillGroup,
 }: {
   section: ReturnType<typeof buildSpendReport>['sections'][number];
-}) {
+} & DrillHandlers) {
   return (
     <>
-      <tr className={RT.groupRow}>
+      <tr
+        className={`${RT.groupRow} cursor-pointer`}
+        title="Double-click to see this group's transactions"
+        onDoubleClick={() => onDrillGroup(section.group, section.group)}
+      >
         <td colSpan={7} className={RT.groupCell}>
           {section.group}
         </td>
@@ -228,7 +308,12 @@ function YtdSection({
         const py = row.actualB ?? 0;
         const vsPy = variancePct(row.actual, py);
         return (
-          <tr key={row.category.id} className={RT.detailRow}>
+          <tr
+            key={row.category.id}
+            className={`${RT.detailRow} cursor-pointer`}
+            title="Double-click to see this category's transactions"
+            onDoubleClick={() => onDrillCategory(row.category.id, row.category.name)}
+          >
             <td className={RT.cellLeft}>{row.category.name}</td>
             <td className={RT.cellRight}>{fmtUsd(row.actual)}</td>
             <td className={RT.cellRightMuted}>
@@ -247,7 +332,11 @@ function YtdSection({
           </tr>
         );
       })}
-      <tr className={RT.subtotalRow}>
+      <tr
+        className={`${RT.subtotalRow} cursor-pointer`}
+        title="Double-click to see this group's transactions"
+        onDoubleClick={() => onDrillGroup(section.group, section.group)}
+      >
         <td className={RT.cellLeft}>{section.group} subtotal</td>
         <td className={RT.cellRight}>{fmtUsd(section.actualTotal)}</td>
         <td className={RT.cellRight}>{fmtUsd(section.budgetTotal)}</td>
