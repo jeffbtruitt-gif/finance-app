@@ -9,7 +9,10 @@
  *          (total + item list + debt-to-assets badge)
  */
 
+import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
+import Highcharts from 'highcharts';
+import HighchartsReact from 'highcharts-react-official';
 import { fmtPct, fmtMoney, fmtUsd } from '@/lib/money';
 import { usePrivacyMode } from '@/lib/privacyModeContext';
 import { maskUsd, PRIVACY_TEXT_PLACEHOLDER } from '@/lib/privacyMoney';
@@ -44,6 +47,8 @@ const EQUITY_COLORS = [
   '#6b7280', // gray-500
   '#94a3b8', // slate-400
 ];
+
+const MONTH_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 function compactUsd(n: number): string {
   const abs = Math.abs(n);
@@ -135,7 +140,7 @@ export function NetWorthHeaderCard(props: NetWorthHeaderCardProps) {
             Trend hidden
           </div>
         ) : (
-          <NetWorthAreaChart points={chartSeries} />
+          <NetWorthAreaChart points={chartSeries} hideValues={hideIncomeAssets} />
         )}
       </div>
 
@@ -217,118 +222,110 @@ export function NetWorthHeaderCard(props: NetWorthHeaderCardProps) {
 /*  Inline area chart (SVG — no external deps)                        */
 /* ------------------------------------------------------------------ */
 
-function NetWorthAreaChart({ points }: { points: NetWorthAtMonth[] }) {
+function NetWorthAreaChart({ points, hideValues }: { points: NetWorthAtMonth[]; hideValues: boolean }) {
+  const options = useMemo<Highcharts.Options>(() => {
+    const navy = '#243460';
+    const gray = '#9ca3af';
+    return {
+      chart: {
+        type: 'areaspline',
+        height: 200,
+        backgroundColor: 'transparent',
+        spacing: [12, 8, 4, 8],
+        style: { fontFamily: "Figtree, Inter, system-ui, sans-serif" },
+      },
+      title: { text: undefined },
+      credits: { enabled: false },
+      legend: { enabled: false },
+      accessibility: { enabled: false },
+      xAxis: {
+        categories: points.map((p) => formatPeriod(p.period, 'short')),
+        tickLength: 0,
+        lineColor: '#e2e8f0',
+        labels: {
+          style: { color: gray, fontSize: '11px', textOverflow: 'none' },
+          autoRotation: [],
+          step: points.length > 14 ? 2 : 1,
+          // Short month; add the year on January and on the first label.
+          formatter() {
+            const p = points[Number(this.pos)];
+            if (!p) return '';
+            const mon = MONTH_ABBR[p.period.month - 1];
+            return p.period.month === 1 || this.isFirst
+              ? `${mon} '${String(p.period.year).slice(-2)}`
+              : mon;
+          },
+        },
+        crosshair: { color: '#cbd5e1', dashStyle: 'Dash', width: 1 },
+      },
+      yAxis: {
+        title: { text: undefined },
+        gridLineColor: '#e2e8f0',
+        gridLineDashStyle: 'Dash',
+        tickAmount: 5,
+        labels: {
+          enabled: !hideValues,
+          style: { color: gray, fontSize: '11px' },
+          formatter() {
+            return compactUsd(Number(this.value));
+          },
+        },
+      },
+      tooltip: {
+        backgroundColor: '#ffffff',
+        borderColor: '#e2e8f0',
+        borderRadius: 8,
+        shadow: true,
+        style: { color: '#1a2240', fontSize: '12px' },
+        formatter() {
+          const value = hideValues ? PRIVACY_TEXT_PLACEHOLDER : fmtUsd(Number(this.y));
+          return `<span style="color:${gray}">${this.key}</span><br/><b>Net worth: ${value}</b>`;
+        },
+      },
+      plotOptions: {
+        areaspline: {
+          lineWidth: 2.5,
+          color: navy,
+          fillColor: {
+            linearGradient: { x1: 0, y1: 0, x2: 0, y2: 1 },
+            stops: [
+              [0, 'rgba(36, 52, 96, 0.18)'],
+              [1, 'rgba(36, 52, 96, 0.01)'],
+            ],
+          },
+          threshold: null,
+          marker: {
+            enabled: false,
+            radius: 4,
+            fillColor: '#ffffff',
+            lineColor: navy,
+            lineWidth: 2,
+            states: { hover: { enabled: true } },
+          },
+          states: { hover: { lineWidthPlus: 0 } },
+        },
+      },
+      series: [
+        {
+          type: 'areaspline',
+          name: 'Net worth',
+          data: points.map((p, i) =>
+            i === points.length - 1
+              ? { y: p.net, marker: { enabled: true } }
+              : p.net,
+          ),
+        },
+      ],
+    };
+  }, [points, hideValues]);
+
   if (points.length === 0) {
     return (
-      <div className="flex h-[180px] items-center justify-center text-sm text-gray-400">
+      <div className="flex h-[200px] items-center justify-center text-sm text-gray-400">
         No data
       </div>
     );
   }
 
-  const W = 860;
-  const H = 200;
-  const PAD_L = 8;
-  const PAD_R = 8;
-  const PAD_T = 20;
-  const PAD_B = 30;
-  const innerW = W - PAD_L - PAD_R;
-  const innerH = H - PAD_T - PAD_B;
-
-  const values = points.map((p) => p.net);
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  const range = max - min || Math.max(Math.abs(max), 1);
-
-  const xy = points.map((p, i) => {
-    const x =
-      points.length === 1
-        ? PAD_L + innerW / 2
-        : PAD_L + (i / (points.length - 1)) * innerW;
-    const y = PAD_T + innerH - ((p.net - min) / range) * innerH;
-    return { x, y, p };
-  });
-
-  const linePath = xy
-    .map((pt, i) => (i === 0 ? `M ${pt.x} ${pt.y}` : `L ${pt.x} ${pt.y}`))
-    .join(' ');
-
-  const areaPath = `${linePath} L ${xy[xy.length - 1].x} ${PAD_T + innerH} L ${xy[0].x} ${PAD_T + innerH} Z`;
-
-  // X-axis labels — pick roughly every other month to avoid crowding
-  const step = points.length <= 14 ? 1 : points.length <= 20 ? 2 : 3;
-  const MONTH_SHORT = [
-    'J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D',
-  ];
-
-  // Gridlines (4 horizontal dashes)
-  const gridCount = 4;
-  const gridLines = Array.from({ length: gridCount }, (_, i) => {
-    const frac = (i + 1) / (gridCount + 1);
-    return PAD_T + innerH * (1 - frac);
-  });
-
-  return (
-    <svg
-      viewBox={`0 0 ${W} ${H}`}
-      className="w-full"
-      preserveAspectRatio="none"
-      style={{ height: 180 }}
-    >
-      {/* grid lines */}
-      {gridLines.map((gy) => (
-        <line
-          key={gy}
-          x1={PAD_L}
-          x2={W - PAD_R}
-          y1={gy}
-          y2={gy}
-          stroke="#e2e8f0"
-          strokeWidth={0.8}
-          strokeDasharray="4 3"
-        />
-      ))}
-      {/* area fill */}
-      <path d={areaPath} fill="#243460" fillOpacity={0.06} />
-      {/* line */}
-      <path
-        d={linePath}
-        fill="none"
-        stroke="#243460"
-        strokeWidth={2}
-        strokeLinejoin="round"
-      />
-      {/* endpoint dot */}
-      <circle
-        cx={xy[xy.length - 1].x}
-        cy={xy[xy.length - 1].y}
-        r={4}
-        fill="white"
-        stroke="#243460"
-        strokeWidth={2}
-      />
-      {/* x-axis labels */}
-      {xy.map((pt, i) => {
-        if (i % step !== 0 && i !== xy.length - 1) return null;
-        return (
-          <text
-            key={i}
-            x={pt.x}
-            y={H - 6}
-            textAnchor="middle"
-            className="fill-gray-400"
-            style={{ fontSize: 11 }}
-          >
-            {MONTH_SHORT[pt.p.period.month - 1]}
-          </text>
-        );
-      })}
-      {/* invisible hover targets for tooltips */}
-      {xy.map((pt, i) => (
-        <circle key={`tip-${i}`} cx={pt.x} cy={pt.y} r={8} fill="transparent">
-          <title>{`${formatPeriod(pt.p.period, 'short')}: ${fmtUsd(pt.p.net)}`}</title>
-        </circle>
-      ))}
-    </svg>
-  );
+  return <HighchartsReact highcharts={Highcharts} options={options} />;
 }
