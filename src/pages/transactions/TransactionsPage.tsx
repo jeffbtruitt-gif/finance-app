@@ -298,6 +298,11 @@ export function TransactionsPage() {
     return null;
   }, [selectedIds, rowById]);
 
+  const makeRuleSelection = useMemo(
+    () => selectedIds.map((id) => rowById.get(id)).filter((r): r is NonNullable<typeof r> => !!r),
+    [selectedIds, rowById],
+  );
+
   useEffect(() => {
     if (makeRuleOpen && !makeRuleSeed) setMakeRuleOpen(false);
   }, [makeRuleOpen, makeRuleSeed]);
@@ -707,6 +712,7 @@ export function TransactionsPage() {
             open={makeRuleOpen}
             onClose={() => setMakeRuleOpen(false)}
             seed={makeRuleSeed}
+            selection={makeRuleSelection}
             householdId={household.id}
             schemeId={schemeId}
             categories={categoriesQ.data ?? []}

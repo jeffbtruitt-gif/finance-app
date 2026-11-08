@@ -15,6 +15,8 @@ export function MakeRuleModal(props: {
   open: boolean;
   onClose: () => void;
   seed: TransactionRow | null;
+  /** All selected rows. When more than one, the rule is generalized from the whole set. */
+  selection?: TransactionRow[];
   householdId: string;
   schemeId: string;
   categories: CategoryOption[];
@@ -23,8 +25,15 @@ export function MakeRuleModal(props: {
   toast: (msg: string) => void;
 }) {
   const qc = useQueryClient();
-  const { open, onClose, seed, householdId, schemeId, categories, accounts, onCreated, toast } =
+  const { open, onClose, seed, selection, householdId, schemeId, categories, accounts, onCreated, toast } =
     props;
+
+  const rows = useMemo<TransactionRow[]>(() => {
+    if (selection && selection.length > 0) return selection;
+    return seed ? [seed] : [];
+  }, [selection, seed]);
+  const isMulti = rows.length > 1;
+  const rowsKey = rows.map((r) => r.id).join(',');
 
   const [pattern, setPattern] = useState('');
   const [matchType, setMatchType] = useState<'contains' | 'starts_with' | 'equals' | 'regex'>(
@@ -35,14 +44,29 @@ export function MakeRuleModal(props: {
   const [applyHistory, setApplyHistory] = useState(true);
 
   useEffect(() => {
-    if (!open || !seed) return;
-    setPattern(seed.description.trim());
-    setMatchType('contains');
+    if (!open || rows.length === 0) return;
+    const suggestion = suggestPattern(rows.map((r) => r.description));
+    setPattern(suggestion.pattern);
+    setMatchType(suggestion.matchType);
     setAccountScope('any');
-    const cat = categories.find((c) => c.name === seed.category_name);
+    // Pre-pick the category only when every selected row already shares it.
+    const catNames = new Set(rows.map((r) => r.category_name ?? ''));
+    const sharedName = catNames.size === 1 ? [...catNames][0] : '';
+    const cat = sharedName ? categories.find((c) => c.name === sharedName) : undefined;
     setCategoryId(cat?.id ?? '');
     setApplyHistory(true);
-  }, [open, seed, categories]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, rowsKey, categories]);
+
+  const selectedMatchCount = useMemo(() => {
+    const acctName =
+      accountScope === 'any' ? null : accounts.find((a) => a.id === accountScope)?.name ?? null;
+    return rows.filter(
+      (r) =>
+        descriptionMatches(r.description, matchType, pattern) &&
+        (acctName === null || r.account_name === acctName),
+    ).length;
+  }, [rows, matchType, pattern, accountScope, accounts]);
 
   const quickAssignCategories = useMemo(
     () =>
@@ -88,7 +112,7 @@ export function MakeRuleModal(props: {
 
   const createMut = useMutation({
     mutationFn: async () => {
-      if (!seed || !pattern.trim() || !categoryId) return;
+      if (rows.length === 0 || !pattern.trim() || !categoryId) return;
       const conds: RuleCondition[] = [];
       if (matchType === 'regex') {
         conds.push({
@@ -118,10 +142,10 @@ export function MakeRuleModal(props: {
         conditions: conds,
         action_category_id: categoryId,
       });
-      // Always categorize the seed transaction itself, regardless of the
-      // "apply to history" / match-type settings below, so it immediately
-      // drops out of the review queue and can't spawn a duplicate rule.
-      await applyBulkAction(schemeId, [seed.id], {
+      // Always categorize the selected transactions themselves, regardless of
+      // the "apply to history" / match-type settings below, so they
+      // immediately drop out of the review queue and can't spawn duplicate rules.
+      await applyBulkAction(schemeId, rows.map((r) => r.id), {
         type: 'set_category',
         category_id: categoryId,
       });
@@ -158,7 +182,7 @@ export function MakeRuleModal(props: {
     if (!open) createMut.reset();
   }, [open, createMut]);
 
-  if (!open || !seed) return null;
+  if (!open || rows.length === 0) return null;
 
   const canSubmit = pattern.trim().length > 0 && !!categoryId;
   const busy = createMut.isPending;
@@ -177,18 +201,27 @@ export function MakeRuleModal(props: {
             Make rule
           </h2>
           <p className="text-caption text-gray-600">
-            Generalize from the selected transaction. Review before confirming.
+            {isMulti
+              ? `Generalize from the ${rows.length} selected transactions. Review before confirming.`
+              : 'Generalize from the selected transaction. Review before confirming.'}
           </p>
         </div>
 
         <div className="overflow-y-auto px-5 py-4">
-          <div className="mb-4 flex gap-3 rounded-lg border border-navy-100 bg-navy-50/50 p-3">
-            <div className="min-w-0 flex-1 break-words text-sm font-semibold text-navy-900">
-              {seed.description}
-            </div>
-            <div className="shrink-0 self-start text-sm font-semibold tabular-nums text-navy-800">
-              {formatMoney(seed.amount)}
-            </div>
+          <div className="mb-4 max-h-40 overflow-y-auto rounded-lg border border-navy-100 bg-navy-50/50">
+            {rows.map((r) => (
+              <div
+                key={r.id}
+                className="flex gap-3 border-b border-navy-100 px-3 py-2 last:border-0"
+              >
+                <div className="min-w-0 flex-1 break-words text-sm font-semibold text-navy-900">
+                  {r.description}
+                </div>
+                <div className="shrink-0 self-start text-sm font-semibold tabular-nums text-navy-800">
+                  {formatMoney(r.amount)}
+                </div>
+              </div>
+            ))}
           </div>
 
           <label className="mb-3 block">
@@ -296,6 +329,20 @@ export function MakeRuleModal(props: {
           </label>
 
           <div className="rounded-md bg-gray-50 px-3 py-2 text-caption text-gray-700">{preview}</div>
+          {isMulti && (
+            <div
+              className={`mt-2 rounded-md px-3 py-2 text-caption ${
+                selectedMatchCount === rows.length
+                  ? 'bg-info-soft text-navy-800'
+                  : 'bg-gold-100/70 text-navy-900'
+              }`}
+            >
+              Pattern matches <strong>{selectedMatchCount}</strong> of {rows.length} selected
+              transactions.
+              {selectedMatchCount < rows.length &&
+                ' All selected rows will still get this category, but the rule won\u2019t catch the others in future.'}
+            </div>
+          )}
         </div>
 
         <div className="flex justify-end gap-2 border-t border-navy-100 bg-gray-50 px-5 py-3">
@@ -314,4 +361,83 @@ export function MakeRuleModal(props: {
       </div>
     </div>
   );
+}
+
+// ----------------------------------------------------------------------------
+// Pattern suggestion from one or more descriptions
+// ----------------------------------------------------------------------------
+
+type MatchType = 'contains' | 'starts_with' | 'equals' | 'regex';
+
+function suggestPattern(descs: string[]): { pattern: string; matchType: MatchType } {
+  const cleaned = descs.map((d) => d.trim()).filter(Boolean);
+  if (cleaned.length === 0) return { pattern: '', matchType: 'contains' };
+  if (cleaned.length === 1) return { pattern: cleaned[0], matchType: 'contains' };
+
+  const unique = new Set(cleaned.map((d) => d.toLowerCase()));
+  if (unique.size === 1) return { pattern: cleaned[0], matchType: 'contains' };
+
+  // Shared leading text (e.g. "AMAZON MKTPL*AB12" / "AMAZON MKTPL*ZX9") → starts with.
+  const prefix = trimToWordBoundary(longestCommonPrefix(cleaned));
+  if (prefix.length >= 4) return { pattern: prefix, matchType: 'starts_with' };
+
+  // Otherwise the longest word that appears in every description → contains.
+  const common = longestSharedToken(cleaned);
+  if (common) return { pattern: common, matchType: 'contains' };
+
+  return { pattern: cleaned[0], matchType: 'contains' };
+}
+
+function longestCommonPrefix(strs: string[]): string {
+  let prefix = strs[0];
+  for (const s of strs.slice(1)) {
+    while (!s.toLowerCase().startsWith(prefix.toLowerCase())) {
+      prefix = prefix.slice(0, -1);
+      if (!prefix) return '';
+    }
+  }
+  return prefix;
+}
+
+/** Drop a trailing partial word / punctuation so "STARBUCKS STO" becomes "STARBUCKS". */
+function trimToWordBoundary(prefix: string): string {
+  const t = prefix.replace(/[\s*#\-_.,/]+$/, '');
+  if (t.length === prefix.length) {
+    // Prefix ended mid-token; cut back to the last separator if there is one.
+    const cut = t.search(/[\s*#\-_.,/][^\s*#\-_.,/]*$/);
+    if (cut >= 4) return t.slice(0, cut).replace(/[\s*#\-_.,/]+$/, '');
+  }
+  return t;
+}
+
+function longestSharedToken(strs: string[]): string | null {
+  const tokenSets = strs.map(
+    (s) => new Set(s.toLowerCase().split(/[^a-z0-9]+/).filter((t) => t.length >= 3)),
+  );
+  let best: string | null = null;
+  for (const t of tokenSets[0]) {
+    if (tokenSets.every((set) => set.has(t)) && (!best || t.length > best.length)) best = t;
+  }
+  return best;
+}
+
+function descriptionMatches(desc: string, op: MatchType, pattern: string): boolean {
+  const p = pattern.trim();
+  if (!p) return false;
+  const d = desc.toLowerCase();
+  const q = p.toLowerCase();
+  switch (op) {
+    case 'contains':
+      return d.includes(q);
+    case 'starts_with':
+      return d.startsWith(q);
+    case 'equals':
+      return d.trim() === q;
+    case 'regex':
+      try {
+        return new RegExp(p, 'i').test(desc);
+      } catch {
+        return false;
+      }
+  }
 }
