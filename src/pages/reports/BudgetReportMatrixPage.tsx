@@ -476,7 +476,7 @@ export function BudgetReportMatrixPage() {
             >
               <div className="sticky top-0 z-[5] flex border-b-2 border-navy-200 bg-navy-50 print:relative">
                 <div
-                  className={`sticky left-0 z-[6] ${colCat} shrink-0 border-r-2 border-navy-200 px-[18px] py-3.5 text-[11px] font-bold uppercase tracking-wider text-navy-700`}
+                  className={`sticky left-0 z-[6] ${colCat} shrink-0 border-r-2 border-navy-200 bg-navy-50 px-[18px] py-3.5 text-[11px] font-bold uppercase tracking-wider text-navy-700`}
                 >
                   Category
                 </div>
@@ -530,7 +530,7 @@ export function BudgetReportMatrixPage() {
                     >
                       <div
                         className={`sticky left-0 z-[4] ${colCat} shrink-0 border-r-2 px-[18px] py-2.5 text-[11.5px] font-bold uppercase tracking-wider ${
-                          isYearly ? 'border-gold-300 text-gold-600' : 'border-navy-200 text-navy-700'
+                          isYearly ? 'border-gold-300 bg-gold-100 text-gold-600' : 'border-navy-200 bg-navy-100 text-navy-700'
                         }`}
                       >
                         <span className={`mr-2 inline-block ${isCollapsed ? '-rotate-90' : ''}`}>▾</span>
@@ -619,7 +619,7 @@ export function BudgetReportMatrixPage() {
                         className={`flex ${rowH} border-b-2 ${isYearly ? 'border-gold-300 bg-gold-100' : 'border-navy-200 bg-navy-50'}`}
                       >
                         <div
-                          className={`sticky left-0 z-[3] ${colCat} shrink-0 border-r-2 px-[18px] text-[13px] font-bold ${isYearly ? 'border-gold-300 text-gold-600' : 'text-navy-800'}`}
+                          className={`sticky left-0 z-[3] ${colCat} shrink-0 border-r-2 px-[18px] text-[13px] font-bold ${isYearly ? 'border-gold-300 bg-gold-100 text-gold-600' : 'border-navy-200 bg-navy-50 text-navy-800'}`}
                         >
                           {group} subtotal
                         </div>
@@ -894,7 +894,7 @@ function FooterRow({
   return (
     <div className={`flex border-t-2 ${st.br} ${st.bg} ${rowH}`}>
       <div
-        className={`sticky left-0 z-[3] ${colCat} shrink-0 border-r-2 ${st.br} px-[18px] flex items-center gap-2 text-[12.5px] font-bold uppercase tracking-wide ${st.fg} ${tone === 'grand' ? 'py-3 text-sm font-extrabold' : ''}`}
+        className={`sticky left-0 z-[3] ${colCat} shrink-0 border-r-2 ${st.br} ${st.bg} px-[18px] flex items-center gap-2 text-[12.5px] font-bold uppercase tracking-wide ${st.fg} ${tone === 'grand' ? 'py-3 text-sm font-extrabold' : ''}`}
       >
         {tone === 'grand' && <span className="h-1.5 w-1.5 rounded-full bg-gold-500" aria-hidden />}
         {label}
