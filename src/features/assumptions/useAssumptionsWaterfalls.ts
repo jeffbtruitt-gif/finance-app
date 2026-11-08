@@ -7,7 +7,7 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useHousehold } from '@/api/household';
-import type { Period } from '@/lib/period';
+import { useDefaultPeriod } from '@/lib/useDefaultPeriod';
 import {
   defaultSchemeQueryKey,
   fetchDefaultSchemeId,
@@ -48,22 +48,22 @@ export interface AssumptionsWaterfallsResult {
 }
 
 /**
- * @param anchorPeriod Same period as the app header picker — drives “actuals
- *   through” month when `year` matches that period’s year (same rule as
- *   Reforecast / Assumptions `as_of_month`).
+ * The reforecast `as_of_month` is anchored on the latest month with actuals
+ * (useDefaultPeriod) — the same rule ReforecastPage uses when it saves a
+ * snapshot and AssumptionsPage uses when it reads one. Anchoring on the header
+ * period instead made the dashboard miss a just-saved reforecast whenever the
+ * header month was earlier than the latest-actuals month.
  */
-export function useAssumptionsWaterfalls(
-  year: number,
-  anchorPeriod: Period,
-): AssumptionsWaterfallsResult {
+export function useAssumptionsWaterfalls(year: number): AssumptionsWaterfallsResult {
   const household = useHousehold();
+  const defaultPeriod = useDefaultPeriod();
 
   const reforecastAsOfMonth = useMemo(() => {
-    const lp = anchorPeriod;
+    const lp = defaultPeriod.period;
     if (year < lp.year) return 12;
     if (year > lp.year) return 0;
     return lp.month;
-  }, [anchorPeriod.year, anchorPeriod.month, year]);
+  }, [defaultPeriod.period, year]);
 
   const schemeQ = useQuery({
     queryKey: defaultSchemeQueryKey(household?.id),
@@ -135,6 +135,7 @@ export function useAssumptionsWaterfalls(
 
   const loading =
     !household ||
+    defaultPeriod.loading ||
     incomeQ.isLoading ||
     savingsQ.isLoading ||
     taxQ.isLoading ||

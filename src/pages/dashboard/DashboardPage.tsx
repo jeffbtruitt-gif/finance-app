@@ -193,7 +193,7 @@ export function DashboardPage() {
       fetchTransactionCountSummary({ filters: {}, schemeId: schemeQ.data! }),
   });
 
-  const assumptionsWf = useAssumptionsWaterfalls(thisMonth.year, thisMonth);
+  const assumptionsWf = useAssumptionsWaterfalls(thisMonth.year);
   const { hasDrafts: reforecastHasDrafts } = useReforecastDraftStatus();
 
   // ── yearly budget queries ────────────────────────────────────────────
