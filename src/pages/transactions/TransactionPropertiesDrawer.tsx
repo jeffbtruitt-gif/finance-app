@@ -13,6 +13,7 @@ import type { TransactionRow } from '@/types';
 import { formatDate } from '@/lib/date';
 import { Button } from '@/components/ds';
 import { DescriptionSearchLink } from './DescriptionSearchLink';
+import { QuickAssignChips } from './QuickAssignChips';
 import { errorMessageFromUnknown } from '@/lib/errors';
 
 function Field({
@@ -361,11 +362,18 @@ export function TransactionPropertiesDrawer(props: {
                 </select>
               </Field>
 
-              <Field
-                label="Category"
-                hint="Default budget scheme. Cleared rows are uncategorized."
-              >
+              {/* div, not Field's <label>: a label would forward clicks on its text to the first chip */}
+              <div className="mb-4">
+                <div className="text-label mb-1.5 uppercase text-gray-600">Category</div>
+                <QuickAssignChips
+                  categories={categoriesQ.data ?? []}
+                  selectedId={categoryId}
+                  disabled={!schemeId || saveMut.isPending}
+                  onPick={setCategoryId}
+                  className="mb-2"
+                />
                 <select
+                  aria-label="Category"
                   className={inputCls}
                   value={categoryId}
                   onChange={(e) => setCategoryId(e.target.value)}
@@ -382,7 +390,10 @@ export function TransactionPropertiesDrawer(props: {
                     </optgroup>
                   ))}
                 </select>
-              </Field>
+                <div className="text-caption mt-1 text-gray-500">
+                  Default budget scheme. Cleared rows are uncategorized.
+                </div>
+              </div>
 
               <Field
                 label="Trip"

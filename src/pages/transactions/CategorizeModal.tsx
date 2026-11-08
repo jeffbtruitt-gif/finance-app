@@ -4,6 +4,7 @@ import { Button } from '@/components/ds';
 import { categoryColorHex } from '@/components/ds';
 import { ALL_GROUPS } from '@/features/categories/constants';
 import type { CategoryOption } from '@/api/transactions';
+import { QuickAssignChips } from './QuickAssignChips';
 
 export function CategorizeModal(props: {
   open: boolean;
@@ -62,6 +63,12 @@ export function CategorizeModal(props: {
           <h2 className="text-h3 text-navy-900">Set category</h2>
           <p className="text-caption text-gray-600">Choose a category for the current selection.</p>
         </div>
+        <QuickAssignChips
+          categories={categories}
+          disabled={busy}
+          onPick={(id) => void pick(id)}
+          className="border-b border-navy-100 px-4 py-3"
+        />
         <div className="border-b border-navy-100 px-4 py-2">
           <input
             type="search"
