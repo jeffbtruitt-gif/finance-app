@@ -4,13 +4,12 @@ export function TransactionActionBar(props: {
   variant: 'floating' | 'inline';
   count: number;
   onCategorize: () => void;
-  onMakeRule: () => void;
   onTrip: () => void;
   onTag: () => void;
   onDelete: () => void;
   onClear: () => void;
 }) {
-  const { variant, count, onCategorize, onMakeRule, onTrip, onTag, onDelete, onClear } = props;
+  const { variant, count, onCategorize, onTrip, onTag, onDelete, onClear } = props;
 
   const wrap =
     variant === 'inline'
@@ -33,7 +32,6 @@ export function TransactionActionBar(props: {
       >
         Set category
       </Button>
-      <BarBtn onClick={onMakeRule}>Make rule</BarBtn>
       <BarBtn onClick={onTrip}>Trip</BarBtn>
       <BarBtn onClick={onTag}>Tag</BarBtn>
       <BarBtn danger onClick={onDelete}>

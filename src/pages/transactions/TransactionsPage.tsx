@@ -76,6 +76,7 @@ export function TransactionsPage() {
   const [categorizeOpen, setCategorizeOpen] = useState(false);
   const [categorizeIds, setCategorizeIds] = useState<string[]>([]);
   const [makeRuleOpen, setMakeRuleOpen] = useState(false);
+  const [makeRuleSeedId, setMakeRuleSeedId] = useState<string | null>(null);
   const [detailTxnId, setDetailTxnId] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
@@ -290,18 +291,14 @@ export function TransactionsPage() {
     [applyMut],
   );
 
-  const makeRuleSeed = useMemo(() => {
-    for (const id of selectedIds) {
-      const row = rowById.get(id);
-      if (row) return row;
-    }
-    return null;
-  }, [selectedIds, rowById]);
-
-  const makeRuleSelection = useMemo(
-    () => selectedIds.map((id) => rowById.get(id)).filter((r): r is NonNullable<typeof r> => !!r),
-    [selectedIds, rowById],
+  const makeRuleSeed = useMemo(
+    () => (makeRuleSeedId ? rowById.get(makeRuleSeedId) ?? null : null),
+    [makeRuleSeedId, rowById],
   );
+  const openMakeRule = useCallback((transactionId: string) => {
+    setMakeRuleSeedId(transactionId);
+    setMakeRuleOpen(true);
+  }, []);
 
   useEffect(() => {
     if (makeRuleOpen && !makeRuleSeed) setMakeRuleOpen(false);
@@ -389,6 +386,19 @@ export function TransactionsPage() {
               </Badge>
             )}
             <DescriptionSearchLink description={r.description} />
+            <button
+              type="button"
+              data-no-row-select
+              onClick={(e) => {
+                e.stopPropagation();
+                openMakeRule(r.id);
+              }}
+              title="Create a rule from this transaction"
+              aria-label={`Make rule from ${r.description}`}
+              className="shrink-0 rounded-full border border-navy-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-navy-700 opacity-0 shadow-sm transition-opacity hover:bg-navy-50 focus:opacity-100 group-hover/row:opacity-100"
+            >
+              + Rule
+            </button>
           </div>
         );
       },
@@ -486,7 +496,7 @@ export function TransactionsPage() {
     groupNames, groupOptions,
     amtMin, amtMax, direction, rawRows,
     hideIncomeAssets, onPickQuick, pickRowCategory,
-    tripMatchByTxnId,
+    tripMatchByTxnId, openMakeRule,
   ]);
 
   const table = useReactTable({
@@ -586,14 +596,6 @@ export function TransactionsPage() {
           variant="inline"
           count={selectedIds.length}
           onCategorize={() => { setCategorizeIds(selectedIds); setCategorizeOpen(true); }}
-          onMakeRule={() => {
-            const hasOnPage = selectedIds.some((id) => rowById.has(id));
-            if (!hasOnPage) {
-              showToast('Selection is not on this page anymore. Clear and pick rows here.');
-              return;
-            }
-            setMakeRuleOpen(true);
-          }}
           onTrip={() => showToast('Trip picker coming soon')}
           onTag={() => showToast('Tag picker coming soon')}
           onDelete={() => {
@@ -654,7 +656,7 @@ export function TransactionsPage() {
                         if (el.closest('[data-no-row-select]')) return;
                         setDetailTxnId(r.original.id);
                       }}
-                      className={`cursor-pointer border-b border-navy-100 border-l-[3px] transition-colors last:border-0 ${rowBg} ${
+                      className={`group/row cursor-pointer border-b border-navy-100 border-l-[3px] transition-colors last:border-0 ${rowBg} ${
                         selected ? 'border-l-gold-500' : 'border-l-transparent'
                       }`}
                     >
@@ -710,9 +712,8 @@ export function TransactionsPage() {
           />
           <MakeRuleModal
             open={makeRuleOpen}
-            onClose={() => setMakeRuleOpen(false)}
+            onClose={() => { setMakeRuleOpen(false); setMakeRuleSeedId(null); }}
             seed={makeRuleSeed}
-            selection={makeRuleSelection}
             householdId={household.id}
             schemeId={schemeId}
             categories={categoriesQ.data ?? []}
@@ -721,7 +722,6 @@ export function TransactionsPage() {
               qc.invalidateQueries({ queryKey: ['transactions'] });
               qc.invalidateQueries({ queryKey: ['transaction_categories'] });
               qc.invalidateQueries({ queryKey: ['rules'] });
-              setRowSelection({});
             }}
             toast={showToast}
           />
