@@ -1,3 +1,4 @@
+import { CategoryOptions } from '@/components/CategoryPicker';
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useHousehold } from '@/api/household';
@@ -115,12 +116,7 @@ export function SingleDetailReportPage() {
             >
               <option value="">— Select category —</option>
               <option value="__all__">All</option>
-              {categoriesQ.data?.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.group_name ? `${c.group_name} · ` : ''}
-                  {c.name}
-                </option>
-              ))}
+              <CategoryOptions categories={categoriesQ.data ?? []} />
             </select>
           </div>
 

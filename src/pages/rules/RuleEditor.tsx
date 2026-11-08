@@ -1,3 +1,4 @@
+import { CategorySelect, type PickableCategory } from '@/components/CategoryPicker';
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
@@ -32,7 +33,7 @@ export function RuleEditor(props: {
   rule: Rule | null;
   schemeId: string;
   householdId: string;
-  categories: { id: string; name: string; group_name?: string | null }[];
+  categories: PickableCategory[];
   transactions: MatchableTransaction[] | undefined;
   onCancel: () => void;
   onSaved: () => void;
@@ -112,21 +113,16 @@ export function RuleEditor(props: {
             placeholder='e.g. STARBUCKS'
           />
         </label>
-        <label className="col-span-12 md:col-span-7">
+        <div className="col-span-12 md:col-span-7">
           <span className="text-label uppercase text-gray-500">Then assign to</span>
-          <select
-            className={`${INP} mt-1`}
+          <CategorySelect
+            className="mt-1"
+            categories={categories}
             value={categoryId}
-            onChange={(e) => setCategoryId(e.target.value)}
-          >
-            <option value="">— pick a category —</option>
-            {categories.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.group_name ? `${c.group_name}: ${c.name}` : c.name}
-              </option>
-            ))}
-          </select>
-        </label>
+            onChange={setCategoryId}
+            selectClassName={INP}
+          />
+        </div>
 
         <div className="col-span-12">
           <div className="mb-1 text-label uppercase text-gray-500">When a transaction matches</div>

@@ -2,9 +2,8 @@ import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ds';
 import { categoryColorHex } from '@/components/ds';
-import { ALL_GROUPS } from '@/features/categories/constants';
 import type { CategoryOption } from '@/api/transactions';
-import { QuickAssignChips } from './QuickAssignChips';
+import { QuickAssignChips, groupCategories } from '@/components/CategoryPicker';
 
 export function CategorizeModal(props: {
   open: boolean;
@@ -23,25 +22,7 @@ export function CategorizeModal(props: {
     return categories.filter((c) => c.name.toLowerCase().includes(s));
   }, [categories, q]);
 
-  const grouped = useMemo(() => {
-    const m = new Map<string, CategoryOption[]>();
-    for (const c of filtered) {
-      const key = c.group_name ?? '(ungrouped)';
-      if (!m.has(key)) m.set(key, []);
-      m.get(key)!.push(c);
-    }
-    const keys = [...m.keys()].sort((a, b) => {
-      if (a === '(ungrouped)') return 1;
-      if (b === '(ungrouped)') return -1;
-      const ia = ALL_GROUPS.indexOf(a as (typeof ALL_GROUPS)[number]);
-      const ib = ALL_GROUPS.indexOf(b as (typeof ALL_GROUPS)[number]);
-      if (ia >= 0 && ib >= 0) return ia - ib;
-      if (ia >= 0) return -1;
-      if (ib >= 0) return 1;
-      return a.localeCompare(b);
-    });
-    return keys.map((k) => ({ label: k === '(ungrouped)' ? 'Ungrouped' : k, items: m.get(k)! }));
-  }, [filtered]);
+  const grouped = useMemo(() => groupCategories(filtered), [filtered]);
 
   if (!open) return null;
 

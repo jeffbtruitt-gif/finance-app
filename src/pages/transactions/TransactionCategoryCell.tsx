@@ -2,31 +2,8 @@ import { createPortal } from 'react-dom';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { CategoryChip, categoryColorHex } from '@/components/ds';
 import type { CategoryOption } from '@/api/transactions';
-import { ALL_GROUPS } from '@/features/categories/constants';
+import { groupCategories, quickAssignCategories } from '@/components/CategoryPicker';
 import type { TransactionRow } from '@/types';
-
-function groupCategories(items: CategoryOption[]) {
-  const m = new Map<string, CategoryOption[]>();
-  for (const c of items) {
-    const key = c.group_name ?? '(ungrouped)';
-    if (!m.has(key)) m.set(key, []);
-    m.get(key)!.push(c);
-  }
-  const keys = [...m.keys()].sort((a, b) => {
-    if (a === '(ungrouped)') return 1;
-    if (b === '(ungrouped)') return -1;
-    const ia = ALL_GROUPS.indexOf(a as (typeof ALL_GROUPS)[number]);
-    const ib = ALL_GROUPS.indexOf(b as (typeof ALL_GROUPS)[number]);
-    if (ia >= 0 && ib >= 0) return ia - ib;
-    if (ia >= 0) return -1;
-    if (ib >= 0) return 1;
-    return a.localeCompare(b);
-  });
-  return keys.map((k) => ({
-    label: k === '(ungrouped)' ? 'Ungrouped' : k,
-    items: m.get(k)!,
-  }));
-}
 
 export function TransactionCategoryCell(props: {
   row: TransactionRow;
@@ -42,7 +19,7 @@ export function TransactionCategoryCell(props: {
 
   const quickAssign = useMemo(
     () =>
-      [...categories].filter((c) => c.quick_assign).sort((a, b) => a.sort_order - b.sort_order),
+      quickAssignCategories(categories),
     [categories],
   );
 

@@ -1,3 +1,4 @@
+import { groupCategories, quickAssignCategories } from '@/components/CategoryPicker';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { OneMoScreen } from './OneMoScreen';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
@@ -115,15 +116,13 @@ function CategorizeSheet({ tx, categories, onApply, onClose }: SheetProps) {
   }, [search, categories]);
 
   const grouped = useMemo(() => {
-    const m = new Map<string, CategoryOption[]>();
-    for (const c of filtered) {
-      const g = c.group_name ?? 'Other';
-      const arr = m.get(g) ?? [];
-      arr.push(c);
-      m.set(g, arr);
-    }
-    return [...m.entries()];
-  }, [filtered]);
+    const groups: [string, CategoryOption[]][] = groupCategories(filtered).map(
+      (g) => [g.label, g.items],
+    );
+    // Quick-assign categories first (hidden while searching), same as desktop pickers.
+    const quick = search ? [] : quickAssignCategories(categories);
+    return quick.length > 0 ? [['Quick assign', quick] as [string, CategoryOption[]], ...groups] : groups;
+  }, [filtered, categories, search]);
 
   const selCat = categories.find(c => c.id === selected);
 

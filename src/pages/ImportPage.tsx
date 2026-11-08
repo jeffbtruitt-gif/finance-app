@@ -1,3 +1,4 @@
+import { CategorySelect } from '@/components/CategoryPicker';
 import {
   Fragment,
   useCallback,
@@ -1907,22 +1908,18 @@ function RecurringTemplatesTab({
               className="mt-1 w-full rounded-md border border-gray-300 bg-white px-2 py-1.5 text-right font-mono text-sm tabular-nums focus:border-navy-500 focus:outline-none focus:ring-2 focus:ring-navy-200"
             />
           </label>
-          <label className="block min-w-[11rem] flex-1 text-xs font-semibold text-gray-600">
+          <div className="block min-w-[11rem] flex-1 text-xs font-semibold text-gray-600">
             Category
-            <select
+            <CategorySelect
+              className="mt-1"
+              categories={categories}
               value={draftCategoryId}
-              onChange={(e) => setDraftCategoryId(e.target.value)}
+              onChange={setDraftCategoryId}
               disabled={!schemeQ.data || categories.length === 0}
-              className="mt-1 w-full rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm focus:border-navy-500 focus:outline-none focus:ring-2 focus:ring-navy-200"
-            >
-              <option value="">— category —</option>
-              {categories.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.group_name ? `${c.group_name} › ${c.name}` : c.name}
-                </option>
-              ))}
-            </select>
-          </label>
+              chipsClassName="mb-1.5 font-normal"
+              selectClassName="w-full rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm font-normal focus:border-navy-500 focus:outline-none focus:ring-2 focus:ring-navy-200"
+            />
+          </div>
           <label className="block min-w-[11rem] flex-1 text-xs font-semibold text-gray-600">
             Account
             <select

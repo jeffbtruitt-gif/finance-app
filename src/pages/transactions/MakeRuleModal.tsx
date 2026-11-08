@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Button, CategoryChip } from '@/components/ds';
+import { Button } from '@/components/ds';
 import { formatMoney } from '@/lib/money';
 import type { TransactionRow } from '@/types';
 import type { RuleCondition } from '@/types/phase2';
@@ -9,7 +9,7 @@ import {
   backfillUncategorizedByDescriptionMatch,
   type CategoryOption,
 } from '@/api/transactions';
-import { ALL_GROUPS } from '@/features/categories/constants';
+import { CategorySelect } from '@/components/CategoryPicker';
 
 export function MakeRuleModal(props: {
   open: boolean;
@@ -43,35 +43,6 @@ export function MakeRuleModal(props: {
     setCategoryId(cat?.id ?? '');
     setApplyHistory(true);
   }, [open, seed, categories]);
-
-  const quickAssignCategories = useMemo(
-    () =>
-      [...categories].filter((c) => c.quick_assign).sort((a, b) => a.sort_order - b.sort_order),
-    [categories],
-  );
-
-  const categorySelectGroups = useMemo(() => {
-    const m = new Map<string, CategoryOption[]>();
-    for (const c of categories) {
-      const key = c.group_name ?? '(ungrouped)';
-      if (!m.has(key)) m.set(key, []);
-      m.get(key)!.push(c);
-    }
-    const keys = [...m.keys()].sort((a, b) => {
-      if (a === '(ungrouped)') return 1;
-      if (b === '(ungrouped)') return -1;
-      const ia = ALL_GROUPS.indexOf(a as (typeof ALL_GROUPS)[number]);
-      const ib = ALL_GROUPS.indexOf(b as (typeof ALL_GROUPS)[number]);
-      if (ia >= 0 && ib >= 0) return ia - ib;
-      if (ia >= 0) return -1;
-      if (ib >= 0) return 1;
-      return a.localeCompare(b);
-    });
-    return keys.map((k) => ({
-      label: k === '(ungrouped)' ? 'Ungrouped' : k,
-      items: m.get(k)!,
-    }));
-  }, [categories]);
 
   const preview = useMemo(() => {
     const cat = categories.find((c) => c.id === categoryId)?.name ?? '…';
@@ -235,54 +206,16 @@ export function MakeRuleModal(props: {
             </select>
           </label>
 
-          {quickAssignCategories.length > 0 && (
-            <div className="mb-3">
-              <span className="text-label text-gray-600">Quick assign</span>
-              <p className="text-caption mt-0.5 text-gray-500">
-                Sets the category field below for this rule only.
-              </p>
-              <div className="mt-1.5 flex flex-wrap gap-2">
-                {quickAssignCategories.map((c) => (
-                  <button
-                    key={c.id}
-                    type="button"
-                    disabled={busy}
-                    onClick={() => setCategoryId(c.id)}
-                    className={`rounded-full border p-0 shadow-sm transition hover:bg-navy-50 disabled:cursor-not-allowed disabled:opacity-45 ${
-                      categoryId === c.id
-                        ? 'border-navy-500 ring-2 ring-navy-300'
-                        : 'border-navy-100 bg-white'
-                    }`}
-                    aria-label={`Use ${c.name} as rule category`}
-                    aria-pressed={categoryId === c.id}
-                  >
-                    <CategoryChip name={c.name} className="!px-2.5 !py-1 !text-xs" />
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          <label className="mb-3 block">
+          <div className="mb-3">
             <span className="text-label text-gray-600">Category</span>
-            <select
-              className="mt-1 w-full rounded-md border border-navy-200 px-3 py-2 text-sm"
+            <CategorySelect
+              className="mt-1"
+              categories={categories}
               value={categoryId}
+              onChange={setCategoryId}
               disabled={busy}
-              onChange={(e) => setCategoryId(e.target.value)}
-            >
-              <option value="">Select category…</option>
-              {categorySelectGroups.map((g) => (
-                <optgroup key={g.label} label={g.label}>
-                  {g.items.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </optgroup>
-              ))}
-            </select>
-          </label>
+            />
+          </div>
 
           <label className="mb-3 flex cursor-pointer items-center gap-2">
             <input

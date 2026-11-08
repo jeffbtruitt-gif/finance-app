@@ -8,12 +8,11 @@ import {
   updateTransaction,
 } from '@/api/transactions';
 import { fetchTrips } from '@/api/trips';
-import type { CategoryOption } from '@/api/transactions';
 import type { TransactionRow } from '@/types';
 import { formatDate } from '@/lib/date';
 import { Button } from '@/components/ds';
 import { DescriptionSearchLink } from './DescriptionSearchLink';
-import { QuickAssignChips } from './QuickAssignChips';
+import { CategorySelect } from '@/components/CategoryPicker';
 import { errorMessageFromUnknown } from '@/lib/errors';
 
 function Field({
@@ -166,18 +165,6 @@ export function TransactionPropertiesDrawer(props: {
     return list;
   }, [categoriesQ.data, row?.category_id, row?.category_name, row?.category_group]);
 
-  const categoriesGrouped = useMemo(() => {
-    const m = new Map<string, CategoryOption[]>();
-    for (const c of categoryOptionsWithFallback) {
-      const g = c.group_name ?? 'Other';
-      if (!m.has(g)) m.set(g, []);
-      m.get(g)!.push(c);
-    }
-    for (const arr of m.values()) {
-      arr.sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name));
-    }
-    return [...m.entries()].sort(([a], [b]) => a.localeCompare(b));
-  }, [categoryOptionsWithFallback]);
 
   const saveMut = useMutation({
     mutationFn: async () => {
@@ -365,31 +352,14 @@ export function TransactionPropertiesDrawer(props: {
               {/* div, not Field's <label>: a label would forward clicks on its text to the first chip */}
               <div className="mb-4">
                 <div className="text-label mb-1.5 uppercase text-gray-600">Category</div>
-                <QuickAssignChips
-                  categories={categoriesQ.data ?? []}
-                  selectedId={categoryId}
-                  disabled={!schemeId || saveMut.isPending}
-                  onPick={setCategoryId}
-                  className="mb-2"
-                />
-                <select
-                  aria-label="Category"
-                  className={inputCls}
+                <CategorySelect
+                  categories={categoryOptionsWithFallback}
                   value={categoryId}
-                  onChange={(e) => setCategoryId(e.target.value)}
-                  disabled={!schemeId}
-                >
-                  <option value="">Uncategorized</option>
-                  {categoriesGrouped.map(([group, items]) => (
-                    <optgroup key={group} label={group}>
-                      {items.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.name}
-                        </option>
-                      ))}
-                    </optgroup>
-                  ))}
-                </select>
+                  onChange={setCategoryId}
+                  placeholder="Uncategorized"
+                  disabled={!schemeId || saveMut.isPending}
+                  selectClassName={inputCls}
+                />
                 <div className="text-caption mt-1 text-gray-500">
                   Default budget scheme. Cleared rows are uncategorized.
                 </div>

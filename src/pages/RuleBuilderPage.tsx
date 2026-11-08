@@ -7,6 +7,8 @@ import { defaultSchemeQueryKey, fetchDefaultSchemeId } from '@/api/reports';
 import { createRule, updateRule, getRule } from '../api/phase2';
 import { listMatchingTransactions } from '../features/rules/engine';
 import { ConditionEditor } from '../features/rules/ConditionEditor';
+import { CategorySelect } from '@/components/CategoryPicker';
+import { fetchCategories } from '@/api/transactions';
 import type { RuleCondition, MatchableTransaction } from '../types/phase2';
 import { Button, Card } from '@/components/ds';
 import { StatusPanel } from '@/components/StatusPanel';
@@ -42,17 +44,7 @@ export function RuleBuilderPage() {
   const categoriesQuery = useQuery({
     queryKey: ['categories', schemeQuery.data],
     enabled: !!schemeQuery.data,
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('tf_categories')
-        .select('id, name, group_name')
-        .eq('scheme_id', schemeQuery.data!)
-        .eq('status', 'active')
-        .order('group_name')
-        .order('sort_order');
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => fetchCategories(schemeQuery.data!),
   });
 
   const allTxQuery = useQuery({
@@ -251,23 +243,15 @@ export function RuleBuilderPage() {
         </div>
 
         <div>
-          <label className="mb-1 block text-label uppercase tracking-wider text-gray-600">
+          <div className="mb-1 block text-label uppercase tracking-wider text-gray-600">
             Then assign category
-          </label>
-          <select
-            className={inputCls}
+          </div>
+          <CategorySelect
+            categories={categoriesQuery.data ?? []}
             value={actionCategoryId}
-            onChange={e => setActionCategoryId(e.target.value)}
-          >
-            <option value="">— pick a category —</option>
-            {Object.entries(groupBy(categoriesQuery.data ?? [], c => c.group_name ?? 'Other')).map(
-              ([group, cats]) => (
-                <optgroup key={group} label={group}>
-                  {cats.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                </optgroup>
-              )
-            )}
-          </select>
+            onChange={setActionCategoryId}
+            selectClassName={inputCls}
+          />
         </div>
 
         {/* Live preview with V4 inline-filter style */}
@@ -511,13 +495,4 @@ function mostCommonToken(strs: string[]): string | null {
     }
   }
   return best?.[0] ?? null;
-}
-
-function groupBy<T>(arr: T[], key: (t: T) => string): Record<string, T[]> {
-  const out: Record<string, T[]> = {};
-  for (const item of arr) {
-    const k = key(item);
-    (out[k] ??= []).push(item);
-  }
-  return out;
 }

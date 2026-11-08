@@ -1,3 +1,4 @@
+import { fetchCategories } from '@/api/transactions';
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -39,16 +40,7 @@ export function RulesPage() {
   const categoriesQuery = useQuery({
     queryKey: ['categories', schemeId],
     enabled: !!schemeId,
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('tf_categories')
-        .select('id, name, group_name')
-        .eq('scheme_id', schemeId!)
-        .eq('status', 'active')
-        .order('sort_order');
-      if (error) throw error;
-      return data as { id: string; name: string; group_name: string | null }[];
-    },
+    queryFn: () => fetchCategories(schemeId!),
   });
 
   const allTxQuery = useQuery({
