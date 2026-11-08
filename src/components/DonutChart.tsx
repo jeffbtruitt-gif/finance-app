@@ -1,11 +1,13 @@
 /**
- * DonutChart — SVG donut with inline % labels and a center stack.
- *
- * 5-slice BS allocation chart or any generic donut. White 2px stroke
- * between slices. Inline % labels on slices >= 26° sweep.
+ * DonutChart (Highcharts pie with inner size) with inline % labels and a
+ * center label/value stack. Used for the dashboard BS allocation donut.
+ * Privacy mode masks dollar amounts in the tooltip.
  */
 
-import { fmtPct, fmtUsd } from '@/lib/money';
+import { useMemo } from 'react';
+import { CHART, HChart, fmtUsd, tipHtml, type Highcharts } from '@/lib/highcharts';
+import { usePrivacyMode } from '@/lib/privacyModeContext';
+import { PRIVACY_USD_PLACEHOLDER } from '@/lib/privacyMoney';
 
 export interface DonutSlice {
   key: string;
@@ -21,121 +23,75 @@ interface Props {
   centerValue?: string;
 }
 
-const DEG_THRESHOLD = 26;
-
-function polarToXY(cx: number, cy: number, r: number, deg: number) {
-  const rad = ((deg - 90) * Math.PI) / 180;
-  return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
-}
-
-export function DonutChart({
-  items,
-  size = 220,
-  centerLabel,
-  centerValue,
-}: Props) {
+export function DonutChart({ items, size = 220, centerLabel, centerValue }: Props) {
+  const { hideIncomeAssets } = usePrivacyMode();
   const total = items.reduce((s, i) => s + i.value, 0);
+
+  const options = useMemo<Highcharts.Options>(
+    () => ({
+      chart: { type: 'pie', height: size, width: size, spacing: [0, 0, 0, 0] },
+      tooltip: {
+        formatter() {
+          const p = this as Highcharts.Point & { percentage: number };
+          return tipHtml(p.name, [
+            { label: 'Value', value: hideIncomeAssets ? PRIVACY_USD_PLACEHOLDER : fmtUsd(Number(p.y)), color: String(p.color) },
+            { label: 'Share', value: `${p.percentage.toFixed(1)}%` },
+          ]);
+        },
+      },
+      plotOptions: {
+        pie: {
+          innerSize: '62%',
+          size: '100%',
+          borderColor: '#ffffff',
+          borderWidth: 2,
+          borderRadius: 2,
+          dataLabels: {
+            enabled: true,
+            distance: '-20%',
+            formatter() {
+              const p = (this as unknown as { point: Highcharts.Point & { percentage: number } }).point ?? (this as unknown as Highcharts.Point & { percentage: number });
+              return p.percentage >= 7 ? `${Math.round(p.percentage)}%` : null;
+            },
+            style: { color: '#ffffff', fontSize: '11px', fontWeight: '600', textOutline: 'none', textOverflow: 'none' },
+          },
+        },
+      },
+      series: [
+        {
+          type: 'pie',
+          name: 'Allocation',
+          data: items.map((s) => ({ name: s.label, y: s.value, color: s.color })),
+        },
+      ],
+    }),
+    [items, size, hideIncomeAssets],
+  );
+
   if (total === 0) {
     return (
-      <div
-        className="flex items-center justify-center text-sm text-gray-400"
-        style={{ width: size, height: size }}
-      >
+      <div className="flex items-center justify-center text-sm text-gray-400" style={{ width: size, height: size }}>
         No data
       </div>
     );
   }
 
-  const rOuter = size / 2 - 6;
-  const rInner = size * 0.32;
-  const cx = size / 2;
-  const cy = size / 2;
-
-  let cursor = 0;
-  const slices = items.map((item) => {
-    const pct = item.value / total;
-    const sweep = pct * 360;
-    const startAngle = cursor;
-    cursor += sweep;
-    return { ...item, pct, sweep, startAngle, endAngle: cursor };
-  });
-
   return (
-    <svg
-      viewBox={`0 0 ${size} ${size}`}
-      width={size}
-      height={size}
-    >
-      {slices.map((s) => {
-        const largeArc = s.sweep > 180 ? 1 : 0;
-        const outerStart = polarToXY(cx, cy, rOuter, s.startAngle);
-        const outerEnd = polarToXY(cx, cy, rOuter, s.endAngle);
-        const innerEnd = polarToXY(cx, cy, rInner, s.endAngle);
-        const innerStart = polarToXY(cx, cy, rInner, s.startAngle);
-
-        const d = [
-          `M ${outerStart.x} ${outerStart.y}`,
-          `A ${rOuter} ${rOuter} 0 ${largeArc} 1 ${outerEnd.x} ${outerEnd.y}`,
-          `L ${innerEnd.x} ${innerEnd.y}`,
-          `A ${rInner} ${rInner} 0 ${largeArc} 0 ${innerStart.x} ${innerStart.y}`,
-          'Z',
-        ].join(' ');
-
-        const midAngle = s.startAngle + s.sweep / 2;
-        const labelR = (rOuter + rInner) / 2;
-        const labelPt = polarToXY(cx, cy, labelR, midAngle);
-
-        return (
-          <g key={s.key}>
-            <title>{`${s.label}: ${fmtUsd(s.value)} (${fmtPct(s.pct * 100, { decimals: 1 })})`}</title>
-            <path d={d} fill={s.color} stroke="white" strokeWidth={2} />
-            {s.sweep >= DEG_THRESHOLD && (
-              <text
-                x={labelPt.x}
-                y={labelPt.y}
-                textAnchor="middle"
-                dominantBaseline="central"
-                fill="white"
-                fontSize={11}
-                fontWeight={600}
-                fontFamily="Figtree, system-ui, sans-serif"
-              >
-                {fmtPct(s.pct * 100, { decimals: 0 })}
-              </text>
-            )}
-          </g>
-        );
-      })}
-
-      {/* center text */}
-      {centerLabel && (
-        <text
-          x={cx}
-          y={cy - 8}
-          textAnchor="middle"
-          dominantBaseline="central"
-          fill="#717889"
-          fontSize={11}
-          fontFamily="Figtree, system-ui, sans-serif"
-        >
-          {centerLabel}
-        </text>
+    <div className="relative" style={{ width: size, height: size }}>
+      <HChart options={options} style={{ width: size }} />
+      {(centerLabel || centerValue) && (
+        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+          {centerLabel && <div className="text-[11px]" style={{ color: CHART.gray }}>{centerLabel}</div>}
+          {centerValue && (
+            <div
+              className="text-lg font-bold tabular-nums"
+              style={{ color: CHART.navy900, fontFamily: CHART.numFont }}
+            >
+              {centerValue}
+            </div>
+          )}
+        </div>
       )}
-      {centerValue && (
-        <text
-          x={cx}
-          y={cy + 10}
-          textAnchor="middle"
-          dominantBaseline="central"
-          fill="#0d1527"
-          fontSize={18}
-          fontWeight={700}
-          fontFamily="'Space Grotesk', system-ui, sans-serif"
-          className="tabular-nums"
-        >
-          {centerValue}
-        </text>
-      )}
-    </svg>
+    </div>
   );
 }

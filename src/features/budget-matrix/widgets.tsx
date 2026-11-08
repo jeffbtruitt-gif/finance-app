@@ -2,6 +2,11 @@
  * Small SVG helpers shared by Budget / Reforecast / Budget matrix report pages.
  */
 
+import { useMemo } from 'react';
+import { HChart, fmtUsd, tipHtml, type Highcharts } from '@/lib/highcharts';
+import { sparklineBase } from '@/lib/sparklineBase';
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const NAVY = '#3b559a';
 const NEG = '#c0392b';
 const POS = '#1e7e5a';
@@ -18,52 +23,46 @@ export function BudgetMatrixSparkline({
 }) {
   const w = 80;
   const h = 22;
-  const vals = values.map((v) => (v == null ? 0 : Number(v)));
+  const options = useMemo<Highcharts.Options>(() => {
+    const base = sparklineBase(w, h);
+    const vals = values.map((v) => (v == null ? 0 : Number(v)));
+    // Line view: months with no value yet are gaps, not drops to zero.
+    const lineVals = values.map((v) => (v == null ? null : Number(v)));
+    const tip = (i: number, v: number) =>
+      tipHtml(MONTHS[i] ?? `Month ${i + 1}`, [
+        { label: signed ? 'Variance' : 'Amount', value: `${signed && v > 0 ? '+' : ''}${fmtUsd(v)}` },
+      ]);
+    if (signed) {
+      return {
+        ...base,
+        yAxis: { ...(base.yAxis as Highcharts.YAxisOptions), plotLines: [{ value: 0, color: GRAY, width: 1 }] },
+        tooltip: { ...base.tooltip, formatter() { return tip(Number(this.index), Number(this.y)); } },
+        series: [
+          {
+            type: 'column',
+            pointWidth: 5,
+            data: vals.map((v) => ({ y: v, color: v > 0 ? NEG : v < 0 ? POS : '#c5cad4' })),
+          },
+        ],
+      };
+    }
+    return {
+      ...base,
+      tooltip: { ...base.tooltip, formatter() { return tip(Number(this.index), Number(this.y)); } },
+      series: [
+        {
+          type: 'area',
+          color: NAVY,
+          fillOpacity: 0.12,
+          lineWidth: bold ? 1.8 : 1.4,
+          threshold: Math.min(0, ...vals),
+          data: lineVals,
+        },
+      ],
+    };
+  }, [values, signed, bold]);
 
-  if (signed) {
-    const maxAbs = Math.max(...vals.map(Math.abs), 1);
-    const mid = h / 2;
-    return (
-      <svg width={w} height={h} className="block shrink-0">
-        <line x1={0} y1={mid} x2={w} y2={mid} stroke={GRAY} strokeWidth={1} />
-        {vals.map((v, i) => {
-          const x = (i / Math.max(vals.length - 1, 1)) * w;
-          const barH = (Math.abs(v) / maxAbs) * (h / 2 - 2);
-          const y = v >= 0 ? mid - barH : mid;
-          const fill = v > 0 ? NEG : v < 0 ? POS : '#c5cad4';
-          return (
-            <rect key={i} x={x - 2.5} y={y} width={5} height={Math.max(barH, 1)} fill={fill} rx={1} />
-          );
-        })}
-      </svg>
-    );
-  }
-
-  const max = Math.max(...vals, 1);
-  const min = Math.min(...vals, 0);
-  const range = max - min || 1;
-  const points = vals
-    .map((v, i) => {
-      const x = (i / Math.max(vals.length - 1, 1)) * w;
-      const y = h - 2 - ((v - min) / range) * (h - 4);
-      return `${x.toFixed(1)},${y.toFixed(1)}`;
-    })
-    .join(' ');
-  const areaPoints = `0,${h} ${points} ${w},${h}`;
-
-  return (
-    <svg width={w} height={h} className="block shrink-0">
-      <polygon points={areaPoints} fill={NAVY} opacity={0.12} />
-      <polyline
-        points={points}
-        fill="none"
-        stroke={NAVY}
-        strokeWidth={bold ? 1.8 : 1.4}
-        strokeLinejoin="round"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
+  return <HChart options={options} style={{ width: w, height: h }} className="shrink-0" />;
 }
 
 export function VarianceMiniBar({

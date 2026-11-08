@@ -11,8 +11,7 @@
 
 import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import Highcharts from 'highcharts';
-import HighchartsReact from 'highcharts-react-official';
+import { HChart, type Highcharts } from '@/lib/highcharts';
 import { fmtPct, fmtMoney, fmtUsd } from '@/lib/money';
 import { usePrivacyMode } from '@/lib/privacyModeContext';
 import { maskUsd, PRIVACY_TEXT_PLACEHOLDER } from '@/lib/privacyMoney';
@@ -327,5 +326,5 @@ function NetWorthAreaChart({ points, hideValues }: { points: NetWorthAtMonth[]; 
     );
   }
 
-  return <HighchartsReact highcharts={Highcharts} options={options} />;
+  return <HChart options={options} />;
 }

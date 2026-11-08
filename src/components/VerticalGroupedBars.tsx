@@ -1,11 +1,10 @@
 /**
- * Vertical grouped-bar chart (SVG) — paired actual vs budget bars per group.
- *
- * viewBox base width = max(520, N × 130) to match MonthlyTrendBars text scale.
- * If actual > budget the actual bar turns neg-red and the group label bolds red.
+ * Grouped column chart (Highcharts) — paired actual vs budget per group.
+ * When actual > budget the actual column turns neg-red and its label bolds red.
  */
 
-import { fmtUsd } from '@/lib/money';
+import { useMemo } from 'react';
+import { CHART, HChart, compactUsd, fmtUsd, tipHtml, type Highcharts } from '@/lib/highcharts';
 
 export interface VerticalGroupedBarItem {
   key: string;
@@ -19,151 +18,94 @@ interface Props {
   height?: number;
 }
 
-const H_DEFAULT = 240;
-const PAD_TOP = 32;
-const PAD_BOT = 50;
-const BAR_RX = 5;
-const PAIR_GAP = 6;
-
-const COLOR_ACTUAL = '#1a2744'; // navy-800
-const COLOR_BUDGET = '#bfcae3'; // navy-200
-const COLOR_OVER = '#c0392b'; // neg
-
-export function VerticalGroupedBars({ items, height = H_DEFAULT }: Props) {
-  if (items.length === 0) {
-    return (
-      <div className="flex h-40 items-center justify-center text-sm text-gray-400">
-        No data
-      </div>
-    );
-  }
-
-  const N = items.length;
-  const W = Math.max(520, N * 130);
-  const slotW = W / N;
-  const barW = Math.min(28, slotW * 0.26);
-  const barArea = height - PAD_TOP - PAD_BOT;
-  const maxVal = Math.max(...items.flatMap((i) => [i.actual, i.budget]), 1);
-
-  const legendY = height - 10;
-
-  return (
-    <svg
-      viewBox={`0 0 ${W} ${height}`}
-      className="w-full"
-      preserveAspectRatio="xMidYMid meet"
-    >
-      {/* baseline */}
-      <line
-        x1={0}
-        x2={W}
-        y1={PAD_TOP + barArea}
-        y2={PAD_TOP + barArea}
-        stroke="#e2e5ec"
-        strokeWidth={0.8}
-      />
-
-      {items.map((item, i) => {
-        const cx = slotW * i + slotW / 2;
-        const over = item.actual > item.budget;
-        const actualFill = over ? COLOR_OVER : COLOR_ACTUAL;
-
-        const aH = (item.actual / maxVal) * barArea;
-        const bH = (item.budget / maxVal) * barArea;
-        const aY = PAD_TOP + barArea - aH;
-        const bY = PAD_TOP + barArea - bH;
-
-        const aX = cx - PAIR_GAP / 2 - barW;
-        const bX = cx + PAIR_GAP / 2;
-
-        return (
-          <g key={item.key}>
-            <title>{`${item.label}\nActual: ${fmtUsd(item.actual)}\nBudget: ${fmtUsd(item.budget)}`}</title>
-            {/* invisible hit area for tooltip */}
-            <rect
-              x={cx - slotW / 2}
-              y={0}
-              width={slotW}
-              height={height}
-              fill="transparent"
-            />
-            {/* actual bar */}
-            <rect
-              x={aX}
-              y={aY}
-              width={barW}
-              height={aH}
-              rx={BAR_RX}
-              fill={actualFill}
-            />
-            {/* budget bar */}
-            <rect
-              x={bX}
-              y={bY}
-              width={barW}
-              height={bH}
-              rx={BAR_RX}
-              fill={COLOR_BUDGET}
-            />
-            {/* value labels above bars */}
-            <text
-              x={aX + barW / 2}
-              y={aY - 6}
-              textAnchor="middle"
-              fill={over ? COLOR_OVER : '#545b6e'}
-              fontSize={5.5}
-              fontWeight={over ? 600 : 400}
-              fontFamily="Figtree, system-ui, sans-serif"
-            >
-              {fmtUsd(item.actual)}
-            </text>
-            <text
-              x={bX + barW / 2}
-              y={bY - 6}
-              textAnchor="middle"
-              fill="#9aa0af"
-              fontSize={5.5}
-              fontFamily="Figtree, system-ui, sans-serif"
-            >
-              {fmtUsd(item.budget)}
-            </text>
-            {/* category label */}
-            <text
-              x={cx}
-              y={PAD_TOP + barArea + 18}
-              textAnchor="middle"
-              fill={over ? COLOR_OVER : '#545b6e'}
-              fontSize={6}
-              fontWeight={over ? 700 : 400}
-              fontFamily="Figtree, system-ui, sans-serif"
-            >
-              {item.label}
-            </text>
-          </g>
-        );
-      })}
-
-      {/* legend */}
-      <rect x={W / 2 - 50} y={legendY - 5} width={6} height={6} rx={1} fill={COLOR_ACTUAL} />
-      <text
-        x={W / 2 - 42}
-        y={legendY}
-        fill="#545b6e"
-        fontSize={6}
-        fontFamily="Figtree, system-ui, sans-serif"
-      >
-        Actual
-      </text>
-      <rect x={W / 2 + 10} y={legendY - 5} width={6} height={6} rx={1} fill={COLOR_BUDGET} />
-      <text
-        x={W / 2 + 18}
-        y={legendY}
-        fill="#545b6e"
-        fontSize={6}
-        fontFamily="Figtree, system-ui, sans-serif"
-      >
-        Budget
-      </text>
-    </svg>
+export function VerticalGroupedBars({ items, height = 260 }: Props) {
+  const options = useMemo<Highcharts.Options>(
+    () => ({
+      chart: { type: 'column', height },
+      legend: { enabled: true, align: 'center', verticalAlign: 'bottom', margin: 6 },
+      xAxis: {
+        categories: items.map((i) => i.label),
+        labels: {
+          formatter() {
+            const it = items[Number(this.pos)];
+            const over = !!it && it.actual > it.budget;
+            return over
+              ? `<span style="color:${CHART.neg};font-weight:700">${this.value}</span>`
+              : `<span style="color:#545b6e">${this.value}</span>`;
+          },
+        },
+      },
+      yAxis: {
+        min: 0,
+        tickAmount: 4,
+        labels: { formatter() { return compactUsd(Number(this.value)); } },
+      },
+      tooltip: {
+        shared: true,
+        formatter() {
+          const it = items[Number(this.points?.[0]?.index ?? 0)];
+          if (!it) return '';
+          const diff = it.actual - it.budget;
+          return tipHtml(it.label, [
+            { label: 'Actual', value: fmtUsd(it.actual), color: it.actual > it.budget ? CHART.neg : CHART.navy800 },
+            { label: 'Budget', value: fmtUsd(it.budget), color: CHART.navy200 },
+            { label: diff > 0 ? 'Over budget' : 'Under budget', value: fmtUsd(Math.abs(diff)) },
+          ]);
+        },
+      },
+      plotOptions: {
+        column: {
+          borderRadius: 5,
+          borderWidth: 0,
+          maxPointWidth: 30,
+          // Space the pair out so both value labels fit side by side.
+          pointPadding: 0.25,
+          groupPadding: 0.12,
+          dataLabels: {
+            enabled: true,
+            allowOverlap: true,
+            crop: false,
+            overflow: 'allow',
+            style: { fontSize: '10.5px', fontWeight: '500', textOutline: 'none' },
+          },
+        },
+      },
+      series: [
+        {
+          type: 'column',
+          name: 'Actual',
+          color: CHART.navy800,
+          data: items.map((it) => {
+            const over = it.actual > it.budget;
+            return {
+              y: it.actual,
+              color: over ? CHART.neg : CHART.navy800,
+              dataLabels: {
+                formatter() { return fmtUsd(it.actual); },
+                style: { color: over ? CHART.neg : '#545b6e', fontWeight: over ? '600' : '500' },
+              },
+            };
+          }),
+        },
+        {
+          type: 'column',
+          name: 'Budget',
+          color: CHART.navy200,
+          data: items.map((it) => ({
+            y: it.budget,
+            dataLabels: {
+              formatter() { return fmtUsd(it.budget); },
+              style: { color: CHART.grayLight },
+            },
+          })),
+        },
+      ],
+    }),
+    [items, height],
   );
+
+  if (items.length === 0) {
+    return <div className="flex h-40 items-center justify-center text-sm text-gray-400">No data</div>;
+  }
+  return <HChart options={options} />;
 }

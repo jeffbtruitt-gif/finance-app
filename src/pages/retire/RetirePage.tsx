@@ -99,7 +99,7 @@ import { fmtUsd, fmtPct } from '@/lib/money';
 import { formatPeriod, type Period } from '@/lib/period';
 import { sumByGroup } from '@/api/dashboard';
 import { Badge, Button, Card as DsCard, RT } from '@/components/ds';
-import { ChartTooltip, type ChartTooltipAnchor } from '@/components/ChartTooltip';
+import { CHART, HChart, compactUsd, tipHtml, type Highcharts } from '@/lib/highcharts';
 
 const PROJECTION_RATES = [0.02, 0.04, 0.06, 0.08, 0.10, 0.12] as const;
 
@@ -1714,29 +1714,6 @@ function RetireInputRow({
 // Projection chart — line (end balance) + bars (contributions)
 // ----------------------------------------------------------------------------
 
-const CHART_W = 1400;
-const CHART_H = 340;
-const CHART_PAD = { top: 20, right: 52, bottom: 36, left: 62 };
-const CHART_INNER_W = CHART_W - CHART_PAD.left - CHART_PAD.right;
-const CHART_INNER_H = CHART_H - CHART_PAD.top - CHART_PAD.bottom;
-
-function chartNiceCeil(v: number): number {
-  if (v <= 0) return 1;
-  const exp = Math.floor(Math.log10(v));
-  const base = Math.pow(10, exp);
-  const scaled = v / base;
-  if (scaled <= 1) return base;
-  if (scaled <= 2) return 2 * base;
-  if (scaled <= 5) return 5 * base;
-  return 10 * base;
-}
-
-function chartCompactDollar(v: number): string {
-  if (Math.abs(v) >= 1_000_000) return `$${(v / 1_000_000).toFixed(1)}M`;
-  if (Math.abs(v) >= 1_000) return `$${(v / 1_000).toFixed(0)}K`;
-  return `$${v.toFixed(0)}`;
-}
-
 function ProjectionChart({
   rows: allRows,
   firstNegIdx: rawFirstNegIdx,
@@ -1746,87 +1723,96 @@ function ProjectionChart({
   firstNegIdx: number | null;
   endYear?: number;
 }) {
-  const [tip, setTip] = useState<{
-    anchor: ChartTooltipAnchor;
-    headline: string;
-    rows: { label: string; value: string }[];
-  } | null>(null);
-
-  const rows = endYear ? allRows.filter((r) => r.year <= endYear) : allRows;
+  const rows = useMemo(
+    () => (endYear ? allRows.filter((r) => r.year <= endYear) : allRows),
+    [allRows, endYear],
+  );
   const firstNegIdx = rawFirstNegIdx != null && rawFirstNegIdx < rows.length ? rawFirstNegIdx : null;
 
-  if (rows.length === 0) return null;
-
-  const contribs = rows.map((r) => r.jeffContrib + r.britContrib);
-  const spends = rows.map((r) => r.spend);
-  const endBals = rows.map((r) => r.endBalance);
-
-  let balMin = 0;
-  let balMax = 0;
-  for (const b of endBals) {
-    if (b > balMax) balMax = b;
-    if (b < balMin) balMin = b;
-  }
-  const niceBalMax = chartNiceCeil(Math.max(1, balMax));
-  const niceBalMin = balMin < 0 ? -chartNiceCeil(-balMin) : 0;
-  const balRange = niceBalMax - niceBalMin;
-
-  const stackedMax = Math.max(1, ...rows.map((_r, i) => contribs[i] + spends[i]));
-  const niceBarMax = chartNiceCeil(stackedMax);
-
-  const xStart = rows[0].year;
-  const xEnd = rows[rows.length - 1].year;
-  const xRange = Math.max(1, xEnd - xStart);
-
-  const xToPx = (x: number) => CHART_PAD.left + ((x - xStart) / xRange) * CHART_INNER_W;
-  const balToPx = (y: number) => CHART_PAD.top + ((niceBalMax - y) / balRange) * CHART_INNER_H;
-  const barToPx = (y: number) =>
-    CHART_PAD.top + CHART_INNER_H - (y / niceBarMax) * CHART_INNER_H;
-
-  const barW = Math.max(3, Math.min(20, (CHART_INNER_W / rows.length) * 0.8));
-
-  const balTicks = 5;
-  const balTickValues = Array.from(
-    { length: balTicks + 1 },
-    (_, i) => niceBalMax - (balRange * i) / balTicks,
-  );
-
-  const barTickCount = 3;
-  const barTickValues = Array.from(
-    { length: barTickCount + 1 },
-    (_, i) => (niceBarMax * i) / barTickCount,
-  );
-
-  const linePath = rows
-    .map((r, i) => {
-      const x = xToPx(r.year);
-      const y = balToPx(r.endBalance);
-      return `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`;
-    })
-    .join(' ');
-
-  const zeroY = balToPx(0);
-  const baselineY = CHART_PAD.top + CHART_INNER_H;
-
-  const xTickStep = Math.max(1, Math.round(xRange / 8));
-  const xTickValues: number[] = [];
-  for (let y = xStart; y <= xEnd; y += xTickStep) xTickValues.push(y);
-  if (xTickValues[xTickValues.length - 1] !== xEnd) xTickValues.push(xEnd);
-
-  function handleBarHover(e: React.MouseEvent, idx: number) {
-    const r = rows[idx];
-    const contrib = r.jeffContrib + r.britContrib;
-    setTip({
-      anchor: { clientX: e.clientX, clientY: e.clientY },
-      headline: `${r.year} (Jeff ${r.jeffAge}, Brit ${r.britAge})`,
-      rows: [
-        { label: 'End Balance', value: fmtUsd(r.endBalance, { decimals: 0 }) },
-        ...(contrib > 0 ? [{ label: 'Contributions', value: fmtUsd(contrib, { decimals: 0 }) }] : []),
-        ...(r.spend > 0 ? [{ label: 'Spend', value: fmtUsd(r.spend, { decimals: 0 }) }] : []),
-        ...(r.interestGains !== 0 ? [{ label: 'Gains', value: fmtUsd(r.interestGains, { decimals: 0 }) }] : []),
+  const options = useMemo<Highcharts.Options>(() => {
+    const hasNeg = rows.some((r) => r.endBalance < 0);
+    return {
+      chart: { height: 340, spacingRight: 4 },
+      legend: { enabled: false },
+      xAxis: {
+        categories: rows.map((r) => String(r.year)),
+        tickInterval: Math.max(1, Math.round(rows.length / 9)),
+        crosshair: { color: 'rgba(36,52,96,0.06)' },
+      },
+      yAxis: [
+        {
+          tickAmount: 6,
+          labels: { formatter() { return compactUsd(Number(this.value)); } },
+          plotLines: [{ value: 0, color: CHART.grayLight, width: 1, zIndex: 3 }],
+          plotBands: hasNeg ? [{ from: -1e15, to: 0, color: 'rgba(251,234,231,0.55)' }] : [],
+        },
+        {
+          opposite: true,
+          gridLineWidth: 0,
+          tickAmount: 6,
+          labels: {
+            style: { color: CHART.navy300 },
+            formatter() { return compactUsd(Number(this.value)); },
+          },
+        },
       ],
-    });
-  }
+      tooltip: {
+        shared: true,
+        formatter() {
+          const r = rows[Number(this.points?.[0]?.index ?? 0)];
+          if (!r) return '';
+          const contrib = r.jeffContrib + r.britContrib;
+          const out: { label: string; value: string; color?: string }[] = [
+            { label: 'End Balance', value: fmtUsd(r.endBalance, { decimals: 0 }), color: CHART.navy700 },
+          ];
+          if (contrib > 0) out.push({ label: 'Contributions', value: fmtUsd(contrib, { decimals: 0 }), color: CHART.navy300 });
+          if (r.spend > 0) out.push({ label: 'Spend', value: fmtUsd(r.spend, { decimals: 0 }), color: 'rgba(220,38,38,0.55)' });
+          if (r.interestGains !== 0) out.push({ label: 'Gains', value: fmtUsd(r.interestGains, { decimals: 0 }) });
+          return tipHtml(`${r.year} (Jeff ${r.jeffAge}, Brit ${r.britAge})`, out);
+        },
+      },
+      plotOptions: {
+        column: {
+          stacking: 'normal',
+          borderWidth: 0,
+          borderRadius: 1,
+          pointPadding: 0.08,
+          groupPadding: 0.04,
+          maxPointWidth: 20,
+          yAxis: 1,
+        },
+        line: { lineWidth: 2.25, marker: { enabled: false, states: { hover: { enabled: true, radius: 4 } } } },
+      },
+      series: [
+        // Spend stacked on top of contributions (first series renders on top).
+        { type: 'column', name: 'Spending', color: 'rgba(220,38,38,0.4)', data: rows.map((r) => r.spend), yAxis: 1 },
+        { type: 'column', name: 'Contributions', color: 'rgba(143,161,204,0.55)', data: rows.map((r) => r.jeffContrib + r.britContrib), yAxis: 1 },
+        {
+          type: 'line',
+          name: 'End Balance',
+          color: CHART.navy700,
+          yAxis: 0,
+          zIndex: 5,
+          data: rows.map((r, i) =>
+            i === firstNegIdx
+              ? {
+                  y: r.endBalance,
+                  marker: { enabled: true, radius: 4.5, fillColor: '#dc2626', lineColor: '#ffffff', lineWidth: 1.5 },
+                  dataLabels: {
+                    enabled: true,
+                    format: 'Runs out',
+                    y: -8,
+                    style: { color: '#dc2626', fontSize: '10px', fontWeight: '600', textOutline: '2px #ffffff' },
+                  },
+                }
+              : r.endBalance,
+          ),
+        },
+      ],
+    };
+  }, [rows, firstNegIdx]);
+
+  if (rows.length === 0) return null;
 
   return (
     <div className="relative">
@@ -1847,185 +1833,7 @@ function ProjectionChart({
           </span>
         </div>
       </div>
-      <svg
-        viewBox={`0 0 ${CHART_W} ${CHART_H}`}
-        width="100%"
-        height={CHART_H}
-        role="img"
-        className="select-none font-sans"
-      >
-        {/* Below-zero shading */}
-        {niceBalMin < 0 && (
-          <rect
-            x={CHART_PAD.left}
-            y={zeroY}
-            width={CHART_INNER_W}
-            height={Math.max(0, baselineY - zeroY)}
-            fill="#fbeae7"
-            opacity={0.4}
-          />
-        )}
-
-        {/* Balance Y-axis grid + labels (left) */}
-        {balTickValues.map((tv, i) => {
-          const y = balToPx(tv);
-          return (
-            <g key={`bt-${i}`}>
-              <line
-                x1={CHART_PAD.left}
-                x2={CHART_PAD.left + CHART_INNER_W}
-                y1={y}
-                y2={y}
-                stroke="#e8ecf5"
-                strokeWidth={1}
-              />
-              <text
-                x={CHART_PAD.left - 8}
-                y={y + 3}
-                fontSize={10}
-                textAnchor="end"
-                fill="#717889"
-              >
-                {chartCompactDollar(tv)}
-              </text>
-            </g>
-          );
-        })}
-
-        {/* Bar Y-axis labels (right) */}
-        {barTickValues.map((tv, i) => {
-          const y = barToPx(tv);
-          return (
-            <text
-              key={`ct-${i}`}
-              x={CHART_PAD.left + CHART_INNER_W + 8}
-              y={y + 3}
-              fontSize={10}
-              textAnchor="start"
-              fill="#8fa1cc"
-            >
-              {chartCompactDollar(tv)}
-            </text>
-          );
-        })}
-
-        {/* Zero line */}
-        <line
-          x1={CHART_PAD.left}
-          x2={CHART_PAD.left + CHART_INNER_W}
-          y1={zeroY}
-          y2={zeroY}
-          stroke="#9aa0af"
-          strokeWidth={1}
-        />
-
-        {/* X-axis labels */}
-        {xTickValues.map((xv, i) => (
-          <text
-            key={`xt-${i}`}
-            x={xToPx(xv)}
-            y={baselineY + 16}
-            fontSize={10}
-            textAnchor="middle"
-            fill="#717889"
-          >
-            {xv}
-          </text>
-        ))}
-
-        {/* Stacked bars: contributions (bottom) + spend (top, red) */}
-        {rows.map((r, i) => {
-          const contrib = contribs[i];
-          const spend = spends[i];
-          if (contrib <= 0 && spend <= 0) return null;
-          const cx = xToPx(r.year);
-          const x = cx - barW / 2;
-          const contribH = Math.max(0, (contrib / niceBarMax) * CHART_INNER_H);
-          const spendH = Math.max(0, (spend / niceBarMax) * CHART_INNER_H);
-          const contribY = baselineY - contribH;
-          const spendY = contribY - spendH;
-          return (
-            <g key={`stack-${i}`} pointerEvents="none">
-              {contrib > 0 && (
-                <rect
-                  x={x}
-                  y={contribY}
-                  width={barW}
-                  height={contribH}
-                  rx={spendH > 0 ? 0 : 1}
-                  fill="#8fa1cc"
-                  opacity={0.5}
-                />
-              )}
-              {spend > 0 && (
-                <rect
-                  x={x}
-                  y={spendY}
-                  width={barW}
-                  height={spendH}
-                  rx={1}
-                  fill="#dc2626"
-                  opacity={0.4}
-                />
-              )}
-            </g>
-          );
-        })}
-
-        {/* End balance line */}
-        <path
-          d={linePath}
-          fill="none"
-          stroke="#243460"
-          strokeWidth={2}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          pointerEvents="none"
-        />
-
-        {/* First-negative marker */}
-        {firstNegIdx != null && (() => {
-          const r = rows[firstNegIdx];
-          const x = xToPx(r.year);
-          const y = balToPx(r.endBalance);
-          return (
-            <g>
-              <circle cx={x} cy={y} r={4} fill="#dc2626" stroke="white" strokeWidth={1.5} />
-              <text
-                x={x}
-                y={y - 10}
-                fontSize={9}
-                textAnchor="middle"
-                fill="#dc2626"
-                fontWeight={600}
-              >
-                Runs out
-              </text>
-            </g>
-          );
-        })()}
-
-        {/* Invisible hover hit areas */}
-        {rows.map((_r, i) => {
-          const slotW = CHART_INNER_W / rows.length;
-          const x = CHART_PAD.left + i * slotW;
-          return (
-            <rect
-              key={`hit-${i}`}
-              x={x}
-              y={CHART_PAD.top}
-              width={slotW}
-              height={CHART_INNER_H}
-              fill="transparent"
-              onMouseEnter={(e) => handleBarHover(e, i)}
-              onMouseMove={(e) => handleBarHover(e, i)}
-              onMouseLeave={() => setTip(null)}
-              className="cursor-crosshair"
-            />
-          );
-        })}
-      </svg>
-      {tip && <ChartTooltip anchor={tip.anchor} headline={tip.headline} rows={tip.rows} />}
+      <HChart options={options} />
     </div>
   );
 }
@@ -2135,46 +1943,47 @@ function HorizontalBarChart({
   bars: { rate: number; balance: number }[];
   large?: boolean;
 }) {
-  const maxVal = Math.max(...bars.map((b) => b.balance), 1);
-  const barHeight = large ? 36 : 28;
-  const gap = large ? 10 : 6;
+  const options = useMemo<Highcharts.Options>(() => {
+    const rowPx = large ? 46 : 36;
+    return {
+      chart: { type: 'bar', height: bars.length * rowPx + 16, spacingRight: 14 },
+      legend: { enabled: false },
+      xAxis: {
+        categories: bars.map((b) => `${(b.rate * 100).toFixed(0)}%`),
+        lineWidth: 0,
+        labels: { style: { color: '#4b5563', fontSize: large ? '13px' : '12px' } },
+      },
+      yAxis: { min: 0, max: Math.max(1, ...bars.map((b) => b.balance)), endOnTick: false, visible: false },
+      tooltip: {
+        formatter() {
+          const b = bars[Number(this.index)];
+          return b ? tipHtml(`${(b.rate * 100).toFixed(0)}% return`, [{ label: 'Projected balance', value: fmtUsd(b.balance, { decimals: 0 }) }]) : '';
+        },
+      },
+      plotOptions: {
+        bar: {
+          borderWidth: 0,
+          borderRadius: 3,
+          pointPadding: 0.08,
+          groupPadding: 0.04,
+          dataLabels: {
+            enabled: true,
+            inside: true,
+            align: 'right',
+            formatter() { return fmtUsd(Number(this.y), { decimals: 0 }); },
+            style: { color: '#ffffff', fontSize: large ? '13px' : '11px', fontWeight: '600', textOutline: 'none' },
+          },
+        },
+      },
+      series: [
+        {
+          type: 'bar',
+          name: 'Balance',
+          data: bars.map((b, i) => ({ y: b.balance, color: BAR_COLORS[i % BAR_COLORS.length] })),
+        },
+      ],
+    };
+  }, [bars, large]);
 
-  return (
-    <div className="space-y-0" style={{ gap }}>
-      {bars.map((bar, i) => {
-        const widthPct = Math.max(1, (bar.balance / maxVal) * 100);
-        return (
-          <div key={bar.rate} className="flex items-center" style={{ gap: 8, marginBottom: gap }}>
-            <div
-              className="shrink-0 text-right tabular-nums text-gray-600"
-              style={{ width: 32, fontSize: large ? 13 : 12 }}
-            >
-              {(bar.rate * 100).toFixed(0)}%
-            </div>
-            <div className="relative flex-1" style={{ height: barHeight }}>
-              <div
-                className="absolute inset-y-0 left-0 rounded-r"
-                style={{
-                  width: `${widthPct}%`,
-                  backgroundColor: BAR_COLORS[i % BAR_COLORS.length],
-                }}
-              />
-              <span
-                className="absolute inset-y-0 flex items-center font-semibold tabular-nums text-white"
-                style={{
-                  left: `${Math.min(widthPct, 97)}%`,
-                  paddingLeft: 8,
-                  fontSize: large ? 13 : 11,
-                  color: widthPct > 60 ? '#ffffff' : '#1a2744',
-                  transform: widthPct > 60 ? `translateX(calc(-100% - 8px))` : undefined,
-                }}
-              >
-                {fmtUsd(bar.balance, { decimals: 0 })}
-              </span>
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
+  return <HChart options={options} />;
 }

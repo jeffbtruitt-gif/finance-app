@@ -1,12 +1,10 @@
 /**
- * Horizontal category bar chart — top spend categories for the current period.
- *
- * Each row: right-aligned label → full-width bar track → value text.
- * Bar fill uses the category's hex color. Value sits inside the bar
- * when the fill is wide enough, else floats outside in gray-700.
+ * Horizontal bar chart (Highcharts) — top spend categories for the period.
+ * Each bar uses its category color over a light navy track; amount at the end.
  */
 
-import { fmtUsd } from '@/lib/money';
+import { useMemo } from 'react';
+import { CHART, HChart, fmtUsd, tipHtml, type Highcharts } from '@/lib/highcharts';
 
 export interface HorizontalCategoryBarItem {
   key: string;
@@ -19,12 +17,60 @@ interface Props {
   items: HorizontalCategoryBarItem[];
 }
 
-const ROW_H = 26;
-const GAP = 14;
-const LABEL_W = 96;
-const FILL_THRESHOLD = 0.28;
+const ROW_PX = 40;
 
 export function HorizontalCategoryBars({ items }: Props) {
+  const options = useMemo<Highcharts.Options>(() => {
+    const max = Math.max(1, ...items.map((i) => i.value)) * 1.18;
+    return {
+      chart: { type: 'bar', height: Math.max(120, items.length * ROW_PX + 16), spacingRight: 12 },
+      legend: { enabled: false },
+      xAxis: {
+        categories: items.map((i) => i.label),
+        lineWidth: 0,
+        labels: { style: { color: '#545b6e', fontSize: '12px' } },
+      },
+      yAxis: { min: 0, max, visible: false },
+      tooltip: {
+        formatter() {
+          const it = items[Number(this.index)];
+          return tipHtml(it?.label ?? '', [{ label: 'Spend', value: fmtUsd(Number(this.y)), color: it?.color }]);
+        },
+      },
+      plotOptions: {
+        bar: {
+          borderRadius: 10,
+          borderWidth: 0,
+          pointWidth: 20,
+          grouping: false,
+        },
+      },
+      series: [
+        {
+          // Full-width track behind each bar.
+          type: 'bar',
+          name: 'track',
+          data: items.map(() => max),
+          color: CHART.navy100,
+          enableMouseTracking: false,
+          dataLabels: { enabled: false },
+          states: { inactive: { opacity: 1 } },
+        },
+        {
+          type: 'bar',
+          name: 'Spend',
+          data: items.map((it) => ({ y: it.value, color: it.color })),
+          dataLabels: {
+            enabled: true,
+            inside: false,
+            formatter() { return fmtUsd(Number(this.y)); },
+            style: { color: '#374151', fontSize: '11px', fontWeight: '600', textOutline: 'none' },
+          },
+        },
+      ],
+    };
+  }, [items]);
+
   if (items.length === 0) {
     return (
       <div className="flex h-32 items-center justify-center text-sm text-gray-400">
@@ -32,52 +78,5 @@ export function HorizontalCategoryBars({ items }: Props) {
       </div>
     );
   }
-
-  const max = Math.max(...items.map((i) => i.value)) * 1.02;
-
-  return (
-    <div className="space-y-0">
-      {items.map((item) => {
-        const ratio = max > 0 ? item.value / max : 0;
-        const wide = ratio >= FILL_THRESHOLD;
-        return (
-          <div
-            key={item.key}
-            className="flex items-center"
-            style={{ height: ROW_H, marginBottom: GAP }}
-            title={`${item.label}: ${fmtUsd(item.value)}`}
-          >
-            <div
-              className="shrink-0 truncate text-right text-[12px] text-gray-600"
-              style={{ width: LABEL_W }}
-            >
-              {item.label}
-            </div>
-            <div className="relative ml-3 flex-1">
-              <div className="h-5 w-full rounded-full bg-navy-100" />
-              <div
-                className="absolute inset-y-0 left-0 rounded-full"
-                style={{
-                  width: `${Math.max(ratio * 100, 1)}%`,
-                  backgroundColor: item.color,
-                }}
-              />
-              <span
-                className={`absolute top-1/2 -translate-y-1/2 text-[11px] font-semibold tabular-nums ${
-                  wide ? 'text-white' : 'text-gray-700'
-                }`}
-                style={
-                  wide
-                    ? { right: `${(1 - ratio) * 100 + 1}%`, paddingRight: 6 }
-                    : { left: `${ratio * 100 + 1}%`, paddingLeft: 6 }
-                }
-              >
-                {fmtUsd(item.value)}
-              </span>
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
+  return <HChart options={options} />;
 }

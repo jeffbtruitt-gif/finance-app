@@ -1,4 +1,6 @@
+import { useMemo } from 'react';
 import { Card, Kpi } from '@/components/ds';
+import { CHART, HChart, compactUsd, tipHtml, type Highcharts } from '@/lib/highcharts';
 import type { ReportMonthGroup } from '@/features/reports/monthlyReportModel';
 import type { TrendMonthPoint, MoverRow } from '@/features/reports/monthlyReportModel';
 import { budgetHealthCounts, topMovers } from '@/features/reports/monthlyReportModel';
@@ -25,10 +27,6 @@ export function ReportsDashboard(props: {
     props.monthlyBudget > 0 ? Math.min(100, (props.monthlyActual / props.monthlyBudget) * 100) : 0;
   const movers = topMovers({ groups: props.groups, limit: 5 });
   const health = budgetHealthCounts(props.groups);
-  const maxTrend = Math.max(
-    1,
-    ...props.trend.map((t) => Math.max(t.actual, t.budget)),
-  );
 
   const composition = props.groups
     .flatMap((g) => g.items)
@@ -124,36 +122,8 @@ export function ReportsDashboard(props: {
         <Card className="lg:col-span-7">
           <div className="text-label uppercase text-gray-500">12-month trend</div>
           <p className="mt-1 text-caption text-gray-500">Monthly spend vs budget (rolling).</p>
-          <div className="mt-4 flex h-40 items-end gap-1">
-            {props.trend.map((t) => {
-              const ah = (t.actual / maxTrend) * 100;
-              const bh = (t.budget / maxTrend) * 100;
-              return (
-                <div key={t.key} className="flex min-w-0 flex-1 flex-col items-center gap-1">
-                  <div className="flex h-32 w-full items-end justify-center gap-0.5">
-                    <div
-                      className="w-1/2 max-w-[14px] rounded-t bg-navy-400"
-                      style={{ height: `${Math.max(ah, 2)}%` }}
-                      title={`Actual ${t.month}: ${fmtUsd(t.actual)}`}
-                    />
-                    <div
-                      className="w-1/2 max-w-[14px] rounded-t bg-gold-400/90"
-                      style={{ height: `${Math.max(bh, 2)}%` }}
-                      title={`Budget ${t.month}: ${fmtUsd(t.budget)}`}
-                    />
-                  </div>
-                  <span className="truncate text-[9px] font-semibold text-gray-500">{t.month}</span>
-                </div>
-              );
-            })}
-          </div>
-          <div className="mt-2 flex gap-4 text-[10px] text-gray-500">
-            <span className="inline-flex items-center gap-1">
-              <span className="inline-block h-2 w-2 rounded-sm bg-navy-400" /> Actual
-            </span>
-            <span className="inline-flex items-center gap-1">
-              <span className="inline-block h-2 w-2 rounded-sm bg-gold-400" /> Budget
-            </span>
+          <div className="mt-3">
+            <TrendColumns trend={props.trend} />
           </div>
         </Card>
 
@@ -168,20 +138,8 @@ export function ReportsDashboard(props: {
       <Card>
         <div className="text-label uppercase text-gray-500">Composition</div>
         <p className="mt-1 text-caption text-gray-500">Share of monthly spend by category.</p>
-        <div className="mt-4 flex h-8 w-full overflow-hidden rounded-md border border-navy-100">
-          {composition.map((c) => (
-            <button
-              key={c.id}
-              type="button"
-              title={`${c.name} ${fmtUsd(c.actual)}`}
-              className="h-full min-w-[2px] transition-opacity hover:opacity-85"
-              style={{
-                width: `${(c.actual / compTotal) * 100}%`,
-                backgroundColor: c.color,
-              }}
-              onClick={() => props.onDrillCategory(c.id, c.name)}
-            />
-          ))}
+        <div className="mt-3">
+          <CompositionStrip items={composition} total={compTotal} onDrillCategory={props.onDrillCategory} />
         </div>
         <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-gray-600">
           {composition.slice(0, 10).map((c) => (
@@ -236,10 +194,7 @@ interface VarianceBarDatum {
 
 function VarianceDivergingChart({
   rows,
-  ariaLabel,
-  minWidth = 560,
-  height = 168,
-  padBottom = 44,
+  height = 200,
 }: {
   rows: VarianceBarDatum[];
   ariaLabel: string;
@@ -247,99 +202,77 @@ function VarianceDivergingChart({
   height?: number;
   padBottom?: number;
 }) {
-  const maxAbs = Math.max(1, ...rows.map((r) => Math.abs(r.varAmt)));
-  const n = rows.length;
-  const W = Math.max(minWidth, 56 + n * 76);
-  const H = height;
-  const padX = 36;
-  const padTop = 16;
-  const midY = padTop + (H - padTop - padBottom) / 2;
-  const maxBarHalf = midY - padTop - 8;
-  const plotW = W - padX * 2;
-  const slot = plotW / Math.max(n, 1);
-  const barW = Math.min(52, slot * 0.52);
+  const options = useMemo<Highcharts.Options>(() => {
+    const maxAbs = Math.max(1, ...rows.map((r) => Math.abs(r.varAmt)));
+    const lim = maxAbs * 1.3;
+    const color = (v: number) => (v > 0 ? VARIANCE_CHART_NEG : v < 0 ? VARIANCE_CHART_POS : '#9aa0af');
+    return {
+      chart: { type: 'column', height },
+      legend: { enabled: false },
+      xAxis: {
+        categories: rows.map((r) => r.axisLabel),
+        lineWidth: 0,
+        labels: {
+          style: { color: '#243460', fontSize: '10.5px', fontWeight: '600', textOverflow: 'ellipsis' },
+        },
+      },
+      yAxis: {
+        min: -lim,
+        max: lim,
+        tickAmount: 5,
+        gridLineWidth: 0,
+        labels: { enabled: false },
+        plotLines: [{ value: 0, color: VARIANCE_CHART_BASELINE, width: 1.5, zIndex: 3 }],
+      },
+      tooltip: {
+        formatter() {
+          const r = rows[Number(this.index)];
+          if (!r) return '';
+          return tipHtml(r.axisLabel, [
+            { label: r.varAmt > 0 ? 'Over budget' : 'Under budget', value: varianceBarValueLabel(r.varAmt), color: color(r.varAmt) },
+          ]) + (r.onBarClick ? '<div style="margin-top:6px;color:#717889;font-size:10.5px">Click to see transactions</div>' : '');
+        },
+      },
+      plotOptions: {
+        column: {
+          borderRadius: 3,
+          borderWidth: 0,
+          maxPointWidth: 52,
+          minPointLength: 3,
+          cursor: 'pointer',
+          point: {
+            events: {
+              click() {
+                rows[this.index]?.onBarClick?.();
+              },
+            },
+          },
+          dataLabels: {
+            enabled: true,
+            crop: false,
+            overflow: 'allow',
+            formatter() {
+              return varianceBarValueLabel(Number(this.y));
+            },
+            style: { fontFamily: CHART.numFont, fontSize: '12px', fontWeight: '600', textOutline: 'none' },
+          },
+        },
+      },
+      series: [
+        {
+          type: 'column',
+          name: 'Variance',
+          data: rows.map((r) => ({
+            y: r.varAmt,
+            color: color(r.varAmt),
+            dataLabels: { style: { color: r.varAmt === 0 ? '#717889' : color(r.varAmt) } },
+          })),
+        },
+      ],
+    };
+  }, [rows, height]);
 
-  return (
-    <div className="overflow-x-auto">
-      <svg
-        width="100%"
-        height={H}
-        viewBox={`0 0 ${W} ${H}`}
-        className="mx-auto max-w-full select-none"
-        role="img"
-        aria-label={ariaLabel}
-      >
-        <line
-          x1={padX}
-          x2={W - padX}
-          y1={midY}
-          y2={midY}
-          stroke={VARIANCE_CHART_BASELINE}
-          strokeWidth={1.5}
-        />
-        {rows.map((r, i) => {
-          const cx = padX + (i + 0.5) * slot;
-          const x = cx - barW / 2;
-          const mag = (Math.abs(r.varAmt) / maxAbs) * maxBarHalf;
-          const fill = r.varAmt > 0 ? VARIANCE_CHART_NEG : r.varAmt < 0 ? VARIANCE_CHART_POS : '#9aa0af';
-          const label = varianceBarValueLabel(r.varAmt);
-          let barY: number;
-          let barH: number;
-          if (r.varAmt >= 0) {
-            barH = Math.max(r.varAmt === 0 ? 0 : mag, r.varAmt === 0 ? 0 : 3);
-            barY = midY - barH;
-          } else {
-            barH = Math.max(mag, 3);
-            barY = midY;
-          }
-          const ty = r.varAmt > 0 ? barY - 6 : r.varAmt < 0 ? barY + barH + 14 : midY - 14;
-          const truncated =
-            r.axisLabel.length > 18 ? `${r.axisLabel.slice(0, 16)}…` : r.axisLabel;
-          return (
-            <g key={r.key}>
-              {r.title ? <title>{r.title}</title> : null}
-              <rect
-                x={x}
-                y={barY}
-                width={barW}
-                height={barH}
-                rx={3}
-                fill={fill}
-                className={r.onBarClick ? 'cursor-pointer transition-opacity hover:opacity-90' : ''}
-                onClick={r.onBarClick}
-              />
-              <text
-                x={cx}
-                y={ty}
-                textAnchor="middle"
-                style={{
-                  fontFamily: "'Space Grotesk', Figtree, system-ui, sans-serif",
-                  fontSize: 12,
-                  fontWeight: 600,
-                  fill: r.varAmt > 0 ? VARIANCE_CHART_NEG : r.varAmt < 0 ? VARIANCE_CHART_POS : '#717889',
-                }}
-              >
-                {label}
-              </text>
-              <text
-                x={cx}
-                y={H - 14}
-                textAnchor="middle"
-                style={{
-                  fontFamily: 'Figtree, Inter, system-ui, sans-serif',
-                  fontSize: 10,
-                  fontWeight: 600,
-                  fill: '#243460',
-                }}
-              >
-                {truncated}
-              </text>
-            </g>
-          );
-        })}
-      </svg>
-    </div>
-  );
+  return <HChart options={options} />;
 }
 
 function GroupVarianceBarChart({
@@ -424,4 +357,91 @@ function MoversList({ title, rows }: { title: string; rows: MoverRow[] }) {
       </ul>
     </div>
   );
+}
+
+function TrendColumns({ trend }: { trend: TrendMonthPoint[] }) {
+  const options = useMemo<Highcharts.Options>(
+    () => ({
+      chart: { type: 'column', height: 200 },
+      legend: { enabled: true, align: 'left', verticalAlign: 'bottom', margin: 4, itemStyle: { fontSize: '10.5px' } },
+      xAxis: { categories: trend.map((t) => t.month), labels: { style: { fontSize: '10px', fontWeight: '600' } } },
+      yAxis: {
+        min: 0,
+        tickAmount: 4,
+        labels: { formatter() { return compactUsd(Number(this.value)); } },
+      },
+      tooltip: {
+        shared: true,
+        formatter() {
+          const t = trend[Number(this.points?.[0]?.index ?? 0)];
+          if (!t) return '';
+          const diff = t.actual - t.budget;
+          return tipHtml(t.month, [
+            { label: 'Actual', value: fmtUsd(t.actual), color: CHART.navy400 },
+            { label: 'Budget', value: fmtUsd(t.budget), color: '#d4b96a' },
+            { label: diff > 0 ? 'Over' : 'Under', value: fmtUsd(Math.abs(diff)) },
+          ]);
+        },
+      },
+      plotOptions: {
+        column: { borderRadius: 3, borderWidth: 0, maxPointWidth: 14, pointPadding: 0.04, groupPadding: 0.14 },
+      },
+      series: [
+        { type: 'column', name: 'Actual', color: CHART.navy400, data: trend.map((t) => t.actual) },
+        { type: 'column', name: 'Budget', color: '#d4b96a', data: trend.map((t) => t.budget) },
+      ],
+    }),
+    [trend],
+  );
+  return <HChart options={options} />;
+}
+
+function CompositionStrip({
+  items,
+  total,
+  onDrillCategory,
+}: {
+  items: ReportMonthGroup['items'];
+  total: number;
+  onDrillCategory: (id: string, name: string) => void;
+}) {
+  const options = useMemo<Highcharts.Options>(
+    () => ({
+      chart: { type: 'bar', height: 52, spacing: [0, 0, 0, 0] },
+      legend: { enabled: false },
+      xAxis: { categories: ['Spend'], visible: false },
+      yAxis: { min: 0, max: 100, visible: false },
+      tooltip: {
+        formatter() {
+          const c = items.find((x) => x.id === (this as unknown as { series: { userOptions: { id?: string } } }).series.userOptions.id);
+          if (!c) return '';
+          return tipHtml(c.name, [
+            { label: 'Spend', value: fmtUsd(c.actual), color: c.color },
+            { label: 'Share', value: `${((c.actual / total) * 100).toFixed(1)}%` },
+          ]) + '<div style="margin-top:6px;color:#717889;font-size:10.5px">Click to see transactions</div>';
+        },
+      },
+      plotOptions: {
+        bar: {
+          stacking: 'percent',
+          borderColor: '#ffffff',
+          borderWidth: 1,
+          pointWidth: 32,
+          cursor: 'pointer',
+          states: { inactive: { opacity: 0.6 } },
+        },
+      },
+      // One series per category so each segment gets its own color and click.
+      series: [...items].reverse().map((c) => ({
+        type: 'bar' as const,
+        id: c.id,
+        name: c.name,
+        color: c.color,
+        data: [c.actual],
+        events: { click: () => onDrillCategory(c.id, c.name) },
+      })),
+    }),
+    [items, total, onDrillCategory],
+  );
+  return <HChart options={options} />;
 }
