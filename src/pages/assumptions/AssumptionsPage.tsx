@@ -32,7 +32,7 @@
  */
 
 import { useEffect, useMemo, useState, type ChangeEvent } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useHousehold } from '@/api/household';
 import { useDefaultPeriod } from '@/lib/useDefaultPeriod';
@@ -776,6 +776,19 @@ export function AssumptionsPage() {
     );
   }
 
+  // Deep links from the dashboard snapshot (e.g. #assumptions-income): once the page
+  // has loaded, scroll to that section and briefly highlight it.
+  const location = useLocation();
+  useEffect(() => {
+    if (loading || !location.hash) return;
+    const el = document.getElementById(decodeURIComponent(location.hash.slice(1)));
+    if (!el) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    el.classList.add('ring-2', 'ring-gold-500', 'ring-offset-2', 'transition-shadow');
+    const t = window.setTimeout(() => el.classList.remove('ring-2', 'ring-gold-500', 'ring-offset-2'), 2200);
+    return () => window.clearTimeout(t);
+  }, [loading, location.hash]);
+
   if (loading) {
     return <StatusPanel kind="loading" message="Loading Assumptions…" />;
   }
@@ -967,7 +980,7 @@ export function AssumptionsPage() {
         </dl>
       </Card>
 
-      <Card padded={false}>
+      <Card padded={false} id="assumptions-income" className="scroll-mt-6">
         <Card.Header
           title="Income"
           action={
@@ -1056,7 +1069,7 @@ export function AssumptionsPage() {
         </div>
       </Card>
 
-      <Card padded={false}>
+      <Card padded={false} id="assumptions-savings" className="scroll-mt-6">
         <Card.Header
           title="Savings"
           action={
@@ -1168,7 +1181,10 @@ export function AssumptionsPage() {
             {fmtPct(suggestedCompositeTaxRate * 100, { decimals: 2 })}
           </span>
         </div>
-        <div className="grid grid-cols-1 gap-x-6 gap-y-3 border-t border-navy-100 p-4 md:grid-cols-2">
+        <div
+          id="assumptions-tax-rate"
+          className="grid scroll-mt-24 grid-cols-1 gap-x-6 gap-y-3 border-t border-navy-100 p-4 md:grid-cols-2"
+        >
           {PINNED_TAX_SIMPLE_KEYS.map((k) => (
             <TaxRow
               key={k}

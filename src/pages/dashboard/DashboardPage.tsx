@@ -195,16 +195,22 @@ export function DashboardPage() {
 
   const assumptionsWf = useAssumptionsWaterfalls(thisMonth.year);
   const navigate = useNavigate();
-  // Actual waterfall: Expenses comes from the saved reforecast, so clicking it opens that report.
-  const actualWaterfallActions = useMemo(
-    () => ({
+  // Actual waterfall: each bar opens where its number comes from so it can be adjusted.
+  // Expenses → Reforecast; Income / Tax / Savings → that part of Budget Assumptions.
+  // (Left Over is derived from the others, so it isn't clickable.)
+  const actualWaterfallActions = useMemo(() => {
+    const toAssumptions = (section: string) => () =>
+      navigate(`/assumptions/${thisMonth.year}#assumptions-${section}`);
+    return {
+      Income: { onClick: toAssumptions('income'), hint: 'Click to edit income assumptions' },
+      Tax: { onClick: toAssumptions('tax-rate'), hint: 'Click to edit the actual tax %' },
       Expenses: {
         onClick: () => navigate(`/budget/${thisMonth.year}/revise`),
         hint: 'Click to open the reforecast',
       },
-    }),
-    [navigate, thisMonth.year],
-  );
+      Savings: { onClick: toAssumptions('savings'), hint: 'Click to edit savings assumptions' },
+    };
+  }, [navigate, thisMonth.year]);
   const { hasDrafts: reforecastHasDrafts } = useReforecastDraftStatus();
 
   // ── yearly budget queries ────────────────────────────────────────────
