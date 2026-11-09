@@ -100,18 +100,22 @@ export function buildYearlyReportRows(args: {
 export function buildMonthlyReportGroups(args: {
   categories: ReportCategory[];
   period: Period;
+  /** Sum over these periods instead of just `period` (YTD report). */
+  periods?: Period[];
+  /** Include the Yearly group (YTD report; 1 MO keeps it separate). */
+  includeYearly?: boolean;
   actuals: ActualLookup;
   budgets: BudgetLookup;
 }): ReportMonthGroup[] {
   const rep = buildSpendReport({
     categories: args.categories,
-    periods: [args.period],
+    periods: args.periods ?? [args.period],
     actuals: args.actuals,
     budgets: args.budgets,
   });
   const groups: ReportMonthGroup[] = [];
   for (const s of rep.sections) {
-    if (s.group === 'Yearly') continue;
+    if (s.group === 'Yearly' && !args.includeYearly) continue;
     groups.push({
       name: spendGroupLabel(s.group),
       drillKey: s.group === 'Uncategorized' ? 'Uncategorized' : s.group,
@@ -152,6 +156,32 @@ export function buildTrendTotals(args: {
     });
   }
   return out;
+}
+
+/**
+ * Per-month totals for an explicit list of months, all spend groups
+ * including Yearly (YTD dashboard: January → selected month).
+ */
+export function buildTrendForPeriods(args: {
+  categories: ReportCategory[];
+  periods: Period[];
+  actuals: ActualLookup;
+  budgets: BudgetLookup;
+}): TrendMonthPoint[] {
+  return args.periods.map((p) => {
+    const rep = buildSpendReport({
+      categories: args.categories,
+      periods: [p],
+      actuals: args.actuals,
+      budgets: args.budgets,
+    });
+    return {
+      month: formatPeriod(p, 'short'),
+      key: periodKey(p),
+      actual: rep.sections.reduce((s, x) => s + x.actualTotal, 0),
+      budget: rep.sections.reduce((s, x) => s + x.budgetTotal, 0),
+    };
+  });
 }
 
 export interface MoverRow {

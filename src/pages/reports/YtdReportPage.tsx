@@ -12,6 +12,9 @@ import {
   budgetsToLookup,
 } from '@/api/reports';
 import { buildSpendReport } from '@/features/reports/grouping';
+import { buildMonthlyReportGroups, buildTrendForPeriods } from '@/features/reports/monthlyReportModel';
+import { ReportsDashboard } from '@/pages/reports/ReportsDashboard';
+import { ReportsTreemap } from '@/pages/reports/ReportsTreemap';
 import {
   fmtUsd,
   variance,
@@ -39,7 +42,7 @@ type DrillHandlers = {
 export function YtdReportPage() {
   const household = useHousehold();
   const { period } = useAppPeriod();
-  const [tab, setTab] = useState<'table' | 'detail'>('table');
+  const [tab, setTab] = useState<'dashboard' | 'table' | 'tree' | 'detail'>('dashboard');
   const [drill, setDrill] = useState<DrillState>(null);
   const [detailTxnId, setDetailTxnId] = useState<string | null>(null);
 
@@ -133,6 +136,24 @@ export function YtdReportPage() {
     });
   }, [categoriesQ.data, actualsCYQ.data, actualsPYQ.data, budgetQ.data, periods, periodsPY]);
 
+  // Dashboard / Treemap model: categories summed Jan → selected month (incl. Yearly).
+  const ytdModel = useMemo(() => {
+    if (!categoriesQ.data || !actualsCYQ.data || !budgetQ.data) return null;
+    const actuals = actualsToLookup(actualsCYQ.data);
+    const budgets = budgetsToLookup(budgetQ.data);
+    return {
+      groups: buildMonthlyReportGroups({
+        categories: categoriesQ.data,
+        period,
+        periods,
+        includeYearly: true,
+        actuals,
+        budgets,
+      }),
+      trend: buildTrendForPeriods({ categories: categoriesQ.data, periods, actuals, budgets }),
+    };
+  }, [categoriesQ.data, actualsCYQ.data, budgetQ.data, period, periods]);
+
   const loading =
     schemeQ.isLoading ||
     categoriesQ.isLoading ||
@@ -168,17 +189,55 @@ export function YtdReportPage() {
       <p className="mb-3 text-sm text-gray-600">
         January through{' '}
         <span className="font-semibold text-navy-900">{formatPeriod(period)}</span> vs same
-        period prior year. Double-click a category or group to see its transactions.
+        period prior year. Click a chart bar or tile, or double-click a table row, to see its transactions.
       </p>
 
       <div className="mb-4 flex gap-1 border-b border-navy-100">
+        <ReportTabButton active={tab === 'dashboard'} onClick={() => setTab('dashboard')}>
+          Dashboard
+        </ReportTabButton>
         <ReportTabButton active={tab === 'table'} onClick={() => setTab('table')}>
           Table
+        </ReportTabButton>
+        <ReportTabButton active={tab === 'tree'} onClick={() => setTab('tree')}>
+          Tree
         </ReportTabButton>
         <ReportTabButton active={tab === 'detail'} onClick={() => setTab('detail')} showDot={!!drill}>
           Detail
         </ReportTabButton>
       </div>
+
+      {(tab === 'dashboard' || tab === 'tree') && loading && (
+        <StatusPanel kind="loading" message="Loading…" />
+      )}
+      {(tab === 'dashboard' || tab === 'tree') && !loading && firstError && (
+        <StatusPanel kind="error" message="Couldn't load the report." detail={(firstError as Error).message} />
+      )}
+
+      {tab === 'dashboard' && !loading && !firstError && ytdModel && report && (
+        <div className="mx-auto max-w-6xl">
+          <ReportsDashboard
+            scope="ytd"
+            label={`Jan – ${formatPeriod(period, 'short')}`}
+            monthlyActual={report.grandActual}
+            monthlyBudget={report.grandBudget}
+            groups={ytdModel.groups}
+            trend={ytdModel.trend}
+            onDrillCategory={onDrillCategory}
+            onDrillGroup={onDrillGroup}
+          />
+        </div>
+      )}
+
+      {tab === 'tree' && !loading && !firstError && ytdModel && (
+        <div className="mx-auto max-w-6xl space-y-4">
+          <p className="text-caption text-gray-500">
+            Tile area matches each category&apos;s share of its group&apos;s year-to-date spend. Click a tile
+            for Detail; double-click the group label to filter the whole group.
+          </p>
+          <ReportsTreemap groups={ytdModel.groups} onDrillItem={onDrillCategory} onDrillGroup={onDrillGroup} />
+        </div>
+      )}
 
       {tab === 'detail' && (
         <ReportDrillDetail
@@ -189,7 +248,7 @@ export function YtdReportPage() {
           onClearDrill={() => setDrill(null)}
           onDrillCategory={onDrillCategory}
           onOpenTransaction={setDetailTxnId}
-          emptyHint="Clear the filter or double-click another category on the Table tab."
+          emptyHint="Clear the filter or pick another category from the Dashboard or Table tab."
         />
       )}
 

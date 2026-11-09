@@ -179,13 +179,16 @@ export function ReportsPage() {
     budgetQ.isLoading;
   const err = schemeQ.error ?? categoriesQ.error ?? actualsQ.error ?? budgetQ.error;
 
+  // Table tab uses the full page width (same as the YTD table); the others stay centered.
+  const contentWidth = tab === 'table' ? 'max-w-none' : 'max-w-6xl';
+
   const displayMonthlyActual = isFuture ? 0 : (model?.monthly.actual ?? 0);
   const displayMonthlyBudget = model?.monthly.budget ?? 0;
 
   return (
     <div className="display-num min-h-full bg-navy-50">
       <header className="sticky top-0 z-20 border-b border-navy-100 bg-navy-50/95 px-8 py-4 backdrop-blur-sm">
-        <div className="mx-auto flex max-w-6xl flex-col gap-3">
+        <div className={`mx-auto flex ${contentWidth} flex-col gap-3`}>
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div className="flex gap-1">
               <ReportTabButton active={tab === 'dashboard'} onClick={() => setTab('dashboard')}>
@@ -208,7 +211,7 @@ export function ReportsPage() {
         </div>
       </header>
 
-      <div className="mx-auto max-w-6xl px-8 py-8">
+      <div className={`mx-auto ${contentWidth} px-8 py-8`}>
         {loading && <StatusPanel kind="loading" message="Loading report…" />}
         {!loading && err && (
           <StatusPanel kind="error" message="Couldn't load the report." detail={(err as Error).message} />

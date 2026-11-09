@@ -14,7 +14,29 @@ export function ReportsDashboard(props: {
   trend: TrendMonthPoint[];
   onDrillCategory: (id: string, name: string) => void;
   onDrillGroup: (drillKey: string, displayLabel: string) => void;
+  /** 'ytd' switches the wording to year-to-date (YTD report). Default 'month'. */
+  scope?: 'month' | 'ytd';
 }) {
+  const ytd = props.scope === 'ytd';
+  const W = ytd
+    ? {
+        budgetSub: 'Year to date',
+        noBudget: 'No YTD budget set',
+        matches: 'Matches YTD budget',
+        vsBudget: 'YTD budget',
+        trendTitle: 'Monthly trend',
+        trendCaption: 'Spend vs budget each month this year (incl. Yearly).',
+        compCaption: 'Share of year-to-date spend by category.',
+      }
+    : {
+        budgetSub: 'Monthly cadence',
+        noBudget: 'No monthly budget set',
+        matches: 'Matches monthly budget',
+        vsBudget: 'monthly budget',
+        trendTitle: '12-month trend',
+        trendCaption: 'Monthly spend vs budget (rolling).',
+        compCaption: 'Share of monthly spend by category.',
+      };
   const v = variance(props.monthlyActual, props.monthlyBudget);
   const vp = variancePct(props.monthlyActual, props.monthlyBudget);
   const budgetUsedPct =
@@ -52,14 +74,14 @@ export function ReportsDashboard(props: {
             </div>
           }
         />
-        <Kpi label="Budget" value={fmtUsd(props.monthlyBudget)} subtitle="Monthly cadence" />
+        <Kpi label="Budget" value={fmtUsd(props.monthlyBudget)} subtitle={W.budgetSub} />
         <Kpi
           label="Budget used"
           value={budgetUsedLabel}
           subtitle={
             props.monthlyBudget > 0
               ? `${fmtUsd(props.monthlyActual)} of ${fmtUsd(props.monthlyBudget)}`
-              : 'No monthly budget set'
+              : W.noBudget
           }
           trend={
             budgetUsedPct == null
@@ -68,7 +90,7 @@ export function ReportsDashboard(props: {
                 ? { direction: 'neg', text: 'Over 100% of budget' }
                 : budgetUsedPct < 100
                   ? { direction: 'pos', text: 'Below full budget' }
-                  : { direction: 'neutral', text: 'Matches monthly budget' }
+                  : { direction: 'neutral', text: W.matches }
           }
         />
         <Kpi
@@ -85,7 +107,7 @@ export function ReportsDashboard(props: {
       <Card>
         <div className="text-label uppercase text-gray-500">Actual vs budget</div>
         <p className="mt-1 text-caption text-gray-500">
-          Group variance vs monthly budget — bars extend up when over, down when under. Click a bar to open the
+          Group variance vs {W.vsBudget} — bars extend up when over, down when under. Click a bar to open the
           Detail tab for that group.
         </p>
         <GroupVarianceBarChart groups={props.groups} onDrillGroup={props.onDrillGroup} />
@@ -94,7 +116,7 @@ export function ReportsDashboard(props: {
       <Card>
         <div className="text-label uppercase text-gray-500">By category</div>
         <p className="mt-1 text-caption text-gray-500">
-          Variance vs monthly budget within each group — green under, red over. Click a bar to drill to that
+          Variance vs {W.vsBudget} within each group — green under, red over. Click a bar to drill to that
           category. Double-click the group title to filter the whole group.
         </p>
         <div className="mt-6 space-y-10">
@@ -120,8 +142,8 @@ export function ReportsDashboard(props: {
 
       <div className="grid gap-4 lg:grid-cols-12">
         <Card className="lg:col-span-7">
-          <div className="text-label uppercase text-gray-500">12-month trend</div>
-          <p className="mt-1 text-caption text-gray-500">Monthly spend vs budget (rolling).</p>
+          <div className="text-label uppercase text-gray-500">{W.trendTitle}</div>
+          <p className="mt-1 text-caption text-gray-500">{W.trendCaption}</p>
           <div className="mt-3">
             <TrendColumns trend={props.trend} />
           </div>
@@ -129,7 +151,7 @@ export function ReportsDashboard(props: {
 
         <Card className="lg:col-span-5">
           <div className="text-label uppercase text-gray-500">Top movers</div>
-          <p className="mt-1 text-caption text-gray-500">Largest variance vs monthly budget.</p>
+          <p className="mt-1 text-caption text-gray-500">Largest variance vs {W.vsBudget}.</p>
           <MoversList title="Over budget" rows={movers.up} />
           <MoversList title="Under budget" rows={movers.down} />
         </Card>
@@ -137,7 +159,7 @@ export function ReportsDashboard(props: {
 
       <Card>
         <div className="text-label uppercase text-gray-500">Composition</div>
-        <p className="mt-1 text-caption text-gray-500">Share of monthly spend by category.</p>
+        <p className="mt-1 text-caption text-gray-500">{W.compCaption}</p>
         <div className="mt-3">
           <CompositionStrip items={composition} total={compTotal} onDrillCategory={props.onDrillCategory} />
         </div>
