@@ -129,13 +129,16 @@ export function ManageAccountsPage() {
                 equity_group: vals.equity_group,
                 sort_order: items.length * 10,
               });
-              if (vals.value_source_url) {
+              if (vals.value_source_url || !vals.track_monthly_updates) {
                 const refreshed = await fetchBalanceSheetItems(household.id);
                 const created = refreshed.find((i) => i.name === vals.name);
                 if (created) {
                   await updateBalanceSheetItem({
                     id: created.id,
-                    patch: { value_source_url: vals.value_source_url },
+                    patch: {
+                      value_source_url: vals.value_source_url,
+                      track_monthly_updates: vals.track_monthly_updates,
+                    },
                   });
                 }
               }
@@ -256,7 +259,12 @@ function AccountSection({
               </td>
               <td className="px-3 py-2 text-sm">
                 {it.is_active ? (
-                  <span className="text-green-600">Active</span>
+                  <span className="text-green-600">
+                    Active
+                    {!it.track_monthly_updates && (
+                      <span className="ml-1.5 text-xs text-gray-400">· no monthly reminder</span>
+                    )}
+                  </span>
                 ) : (
                   <span className="text-gray-400">Archived</span>
                 )}
@@ -295,6 +303,7 @@ function AccountModal({
     type: BsItemType;
     equity_group: string | null;
     value_source_url: string | null;
+    track_monthly_updates: boolean;
   }) => Promise<void>;
   onArchive?: () => Promise<void>;
   onDelete?: () => Promise<void>;
@@ -306,6 +315,7 @@ function AccountModal({
   const [type, setType] = useState<BsItemType>(item?.type ?? 'asset');
   const [group, setGroup] = useState(item?.equity_group ?? '');
   const [url, setUrl] = useState(item?.value_source_url ?? '');
+  const [trackUpdates, setTrackUpdates] = useState(item?.track_monthly_updates ?? true);
   const [busy, setBusy] = useState(false);
 
   const backdropRef = useRef<HTMLDivElement>(null);
@@ -337,6 +347,7 @@ function AccountModal({
         type,
         equity_group: group || null,
         value_source_url: url.trim() || null,
+        track_monthly_updates: trackUpdates,
       });
     } finally {
       setBusy(false);
@@ -400,6 +411,21 @@ function AccountModal({
               The page where you check this balance — e.g. your bank or brokerage site.
             </p>
           </div>
+          <label className="flex items-start gap-2 text-sm text-gray-700">
+            <input
+              type="checkbox"
+              className="mt-0.5"
+              checked={trackUpdates}
+              onChange={(e) => setTrackUpdates(e.target.checked)}
+            />
+            <span>
+              Remind me to update this balance monthly
+              <span className="block text-xs text-gray-400">
+                Turn off for accounts that no longer change, like a paid-off loan. It won&apos;t be flagged as
+                not updated on the Balance Sheet page.
+              </span>
+            </span>
+          </label>
         </div>
 
         <div className="flex items-center justify-between border-t border-navy-100 px-6 py-4">

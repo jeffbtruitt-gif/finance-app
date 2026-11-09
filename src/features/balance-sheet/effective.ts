@@ -97,6 +97,8 @@ export interface BsItem {
   is_active: boolean;
   /** Optional page (e.g. institution login) used to look up this balance — one per item. */
   value_source_url: string | null;
+  /** Show the "not updated this month" indicator (off for e.g. a paid-off loan). */
+  track_monthly_updates: boolean;
 }
 
 export interface NetWorthAtMonth {

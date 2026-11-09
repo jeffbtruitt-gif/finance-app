@@ -24,6 +24,7 @@ import {
   fetchBalanceSheetValues,
   setBalanceSheetValue,
   deleteBalanceSheetValue,
+  updateBalanceSheetItem,
 } from '@/api/balanceSheet';
 import {
   bsMonthToPeriod,
@@ -126,6 +127,7 @@ export function BalanceSheetPage() {
         <>
         <UpdateStatusBanner
           items={items.filter((i) => i.is_active)}
+          untrackedCount={items.filter((i) => i.is_active && !i.track_monthly_updates).length}
           lastEntryIso={lastEntryIso}
           targetIso={targetIso}
           period={period}
@@ -155,6 +157,10 @@ export function BalanceSheetPage() {
             }}
             onDelete={async (vals) => {
               await deleteBalanceSheetValue(vals);
+              invalidate();
+            }}
+            onToggleTracking={async (id, on) => {
+              await updateBalanceSheetItem({ id, patch: { track_monthly_updates: on } });
               invalidate();
             }}
           />
@@ -334,8 +340,10 @@ function ItemSection({
               >
                 <td className="px-3 py-1.5 font-medium">
                   <span className="inline-flex items-center gap-2">
-                    {it.is_active && (
+                    {it.is_active && it.track_monthly_updates ? (
                       <UpdateDot lastIso={lastEntryIso.get(it.id) ?? null} targetIso={targetIso} />
+                    ) : (
+                      <span className="inline-block h-2 w-2 shrink-0" aria-hidden />
                     )}
                     {it.name}
                   </span>
@@ -343,7 +351,7 @@ function ItemSection({
                 <td className="px-3 py-1.5 text-sm text-gray-500">{it.equity_group || '—'}</td>
                 <td className="px-3 py-1.5 text-right tabular-nums">
                   {v == null ? <span className="text-gray-300">—</span> : $(v)}
-                  {it.is_active && (
+                  {it.is_active && it.track_monthly_updates && (
                     <StaleNote lastIso={lastEntryIso.get(it.id) ?? null} targetIso={targetIso} />
                   )}
                 </td>
@@ -424,10 +432,11 @@ interface ValueEditorProps {
     notes?: string | null;
   }) => Promise<void>;
   onDelete: (args: { item_id: string; as_of_month: string }) => Promise<void>;
+  onToggleTracking?: (itemId: string, on: boolean) => Promise<void>;
 }
 
 function ValueEditorPanel(props: ValueEditorProps) {
-  const { item, values, effectiveValue, targetIso, onSave, onDelete } = props;
+  const { item, values, effectiveValue, targetIso, onSave, onDelete, onToggleTracking } = props;
   const { hideIncomeAssets } = usePrivacyMode();
   const $ = (n: number) => maskUsd(hideIncomeAssets, n, true);
 
@@ -459,6 +468,19 @@ function ValueEditorPanel(props: ValueEditorProps) {
           )}
         </div>
         <h2 className="mt-1 text-h2 text-navy-900">{item.name}</h2>
+        {onToggleTracking && (
+          <label className="mt-2 flex items-center gap-2 text-caption text-gray-600">
+            <input
+              type="checkbox"
+              checked={item.track_monthly_updates}
+              onChange={(e) => void onToggleTracking(item.id, e.target.checked)}
+            />
+            Remind me to update monthly
+            {!item.track_monthly_updates && (
+              <span className="text-gray-400">— off (e.g. paid off)</span>
+            )}
+          </label>
+        )}
         <div className="mt-1 text-caption text-gray-500">
           Effective at {targetIso.slice(0, 7)}:{' '}
           <span className="tabular-nums font-semibold text-navy-800">
@@ -628,19 +650,29 @@ function StaleNote({ lastIso, targetIso }: { lastIso: string | null; targetIso: 
 }
 
 function UpdateStatusBanner({
-  items,
+  items: allItems,
+  untrackedCount,
   lastEntryIso,
   targetIso,
   period,
   onSelect,
 }: {
   items: BsItem[];
+  untrackedCount: number;
   lastEntryIso: Map<string, string>;
   targetIso: string;
   period: Period;
   onSelect: (id: string) => void;
 }) {
+  const items = allItems.filter((i) => i.track_monthly_updates);
   if (items.length === 0) return null;
+  const untrackedNote =
+    untrackedCount > 0 ? (
+      <span className="text-xs text-gray-500">
+        {' '}
+        ({untrackedCount} {untrackedCount === 1 ? 'account' : 'accounts'} with reminders off)
+      </span>
+    ) : null;
   const stale = items.filter((i) => lastEntryIso.get(i.id) !== targetIso);
   const month = formatPeriod(period);
 
@@ -650,6 +682,7 @@ function UpdateStatusBanner({
         <span className="inline-block h-2 w-2 rounded-full bg-pos" />
         <span>
           All {items.length} accounts are updated for <strong>{month}</strong>.
+          {untrackedNote}
         </span>
       </div>
     );
@@ -676,6 +709,7 @@ function UpdateStatusBanner({
                 month.
               </>
             )}
+            {untrackedNote}
           </div>
           {!none && (
             <div className="mt-2 flex flex-wrap gap-1.5">

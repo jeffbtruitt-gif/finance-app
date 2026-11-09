@@ -273,6 +273,7 @@ export type Database = {
           is_active: boolean;
           equity_group: string | null;
           value_source_url: string | null;
+          track_monthly_updates: boolean;
           created_at: string;
         };
         Insert: {
@@ -284,6 +285,7 @@ export type Database = {
           is_active?: boolean;
           equity_group?: string | null;
           value_source_url?: string | null;
+          track_monthly_updates?: boolean;
           created_at?: string;
         };
         Update: Partial<Database['public']['Tables']['tf_balance_sheet_items']['Row']>;

@@ -23,7 +23,7 @@ export async function fetchBalanceSheetItems(
 ): Promise<BsItem[]> {
   const { data, error } = await supabase
     .from('tf_balance_sheet_items')
-    .select('id, name, type, sort_order, equity_group, is_active, value_source_url')
+    .select('id, name, type, sort_order, equity_group, is_active, value_source_url, track_monthly_updates')
     .eq('household_id', household_id)
     .order('type', { ascending: true })   // assets first, then liabilities
     .order('sort_order', { ascending: true });
@@ -36,6 +36,7 @@ export async function fetchBalanceSheetItems(
     equity_group: r.equity_group ?? null,
     is_active: r.is_active,
     value_source_url: r.value_source_url ?? null,
+    track_monthly_updates: r.track_monthly_updates ?? true,
   }));
 }
 
@@ -56,7 +57,7 @@ export async function createBalanceSheetItem(args: {
       sort_order: args.sort_order ?? 0,
       is_active: true,
     })
-    .select('id, name, type, sort_order, equity_group, is_active, value_source_url')
+    .select('id, name, type, sort_order, equity_group, is_active, value_source_url, track_monthly_updates')
     .single();
   if (error) throw error;
   return {
@@ -67,6 +68,7 @@ export async function createBalanceSheetItem(args: {
     equity_group: data.equity_group ?? null,
     is_active: data.is_active,
     value_source_url: data.value_source_url ?? null,
+    track_monthly_updates: data.track_monthly_updates ?? true,
   };
 }
 
@@ -79,6 +81,7 @@ export async function updateBalanceSheetItem(args: {
     sort_order: number;
     is_active: boolean;
     value_source_url: string | null;
+    track_monthly_updates: boolean;
   }>;
 }): Promise<void> {
   const { error } = await supabase
