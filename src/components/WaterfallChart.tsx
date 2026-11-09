@@ -19,9 +19,14 @@ interface WaterfallChartProps {
   caption?: string;
   /** Optional className passed to the wrapping <div>. */
   className?: string;
+  /**
+   * Make individual bars clickable: map a step label to a click handler and
+   * an optional tooltip hint (e.g. Expenses → open the reforecast).
+   */
+  stepActions?: Partial<Record<Waterfall['steps'][number]['label'], { onClick: () => void; hint: string }>>;
 }
 
-export function WaterfallChart({ waterfall, caption, className }: WaterfallChartProps) {
+export function WaterfallChart({ waterfall, caption, className, stepActions }: WaterfallChartProps) {
   const { hideIncomeAssets } = usePrivacyMode();
 
   const options = useMemo<Highcharts.Options>(() => {
@@ -29,11 +34,18 @@ export function WaterfallChart({ waterfall, caption, className }: WaterfallChart
     const money = (n: number) => (hideIncomeAssets ? PRIVACY_USD_PLACEHOLDER : fmtUsd(n));
     const data: Highcharts.PointOptionsObject[] = steps.map((s, i) => {
       const isFinal = i === steps.length - 1;
-      if (i === 0) return { name: s.label, y: s.delta, color: CHART.pos };
-      if (isFinal) {
-        return { name: s.label, isSum: true, color: s.total >= 0 ? CHART.pos : CHART.warn };
+      const action = stepActions?.[s.label];
+      const point: Highcharts.PointOptionsObject =
+        i === 0
+          ? { name: s.label, y: s.delta, color: CHART.pos }
+          : isFinal
+            ? { name: s.label, isSum: true, color: s.total >= 0 ? CHART.pos : CHART.warn }
+            : { name: s.label, y: s.delta, color: CHART.neg };
+      if (action) {
+        point.className = 'cursor-pointer';
+        point.events = { click: action.onClick };
       }
-      return { name: s.label, y: s.delta, color: CHART.neg };
+      return point;
     });
 
     return {
@@ -58,7 +70,11 @@ export function WaterfallChart({ waterfall, caption, className }: WaterfallChart
           if (!s) return '';
           const rows = [{ label: i === 0 || i === steps.length - 1 ? 'Amount' : 'Outflow', value: money(Math.abs(s.delta || s.total)) }];
           if (i > 0 && i < steps.length - 1) rows.push({ label: 'Running total', value: money(s.total) });
-          return tipHtml(s.label, rows);
+          const hint = stepActions?.[s.label]?.hint;
+          return (
+            tipHtml(s.label, rows) +
+            (hint ? `<div style="margin-top:6px;color:#717889;font-size:10.5px">${hint}</div>` : '')
+          );
         },
       },
       plotOptions: {
@@ -85,7 +101,7 @@ export function WaterfallChart({ waterfall, caption, className }: WaterfallChart
       },
       series: [{ type: 'waterfall', name: 'Waterfall', data }],
     };
-  }, [waterfall, hideIncomeAssets]);
+  }, [waterfall, hideIncomeAssets, stepActions]);
 
   return (
     <div className={className}>

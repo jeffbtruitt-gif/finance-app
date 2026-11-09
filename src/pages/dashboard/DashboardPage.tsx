@@ -15,7 +15,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useHousehold } from '@/api/household';
 import { useAppPeriod } from '@/lib/appPeriodContext';
 import { useDefaultPeriod } from '@/lib/useDefaultPeriod';
@@ -194,6 +194,17 @@ export function DashboardPage() {
   });
 
   const assumptionsWf = useAssumptionsWaterfalls(thisMonth.year);
+  const navigate = useNavigate();
+  // Actual waterfall: Expenses comes from the saved reforecast, so clicking it opens that report.
+  const actualWaterfallActions = useMemo(
+    () => ({
+      Expenses: {
+        onClick: () => navigate(`/budget/${thisMonth.year}/revise`),
+        hint: 'Click to open the reforecast',
+      },
+    }),
+    [navigate, thisMonth.year],
+  );
   const { hasDrafts: reforecastHasDrafts } = useReforecastDraftStatus();
 
   // ── yearly budget queries ────────────────────────────────────────────
@@ -726,7 +737,11 @@ export function DashboardPage() {
                   <WaterfallChart waterfall={assumptionsWf.projWaterfall} caption="Projection" />
                 </Card>
                 <Card>
-                  <WaterfallChart waterfall={assumptionsWf.actualWaterfall} caption="Actual" />
+                  <WaterfallChart
+                    waterfall={assumptionsWf.actualWaterfall}
+                    caption="Actual"
+                    stepActions={actualWaterfallActions}
+                  />
                 </Card>
               </div>
             ) : null}
