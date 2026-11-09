@@ -215,7 +215,7 @@ export function YtdReportPage() {
       )}
 
       {tab === 'dashboard' && !loading && !firstError && ytdModel && report && (
-        <div className="mx-auto max-w-6xl">
+        <div className="max-w-6xl">
           <ReportsDashboard
             scope="ytd"
             label={`Jan – ${formatPeriod(period, 'short')}`}
@@ -230,7 +230,7 @@ export function YtdReportPage() {
       )}
 
       {tab === 'tree' && !loading && !firstError && ytdModel && (
-        <div className="mx-auto max-w-6xl space-y-4">
+        <div className="max-w-6xl space-y-4">
           <p className="text-caption text-gray-500">
             Tile area matches each category&apos;s share of its group&apos;s year-to-date spend. Click a tile
             for Detail; double-click the group label to filter the whole group.
