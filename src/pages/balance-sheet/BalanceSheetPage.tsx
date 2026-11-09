@@ -26,6 +26,7 @@ import {
   deleteBalanceSheetValue,
 } from '@/api/balanceSheet';
 import {
+  bsMonthToPeriod,
   effectiveValuesAt,
   periodToBsMonth,
   netWorthSeries,
@@ -37,7 +38,7 @@ import { useAppPeriod } from '@/lib/appPeriodContext';
 import { varianceClass } from '@/lib/money';
 import { usePrivacyMode } from '@/lib/privacyModeContext';
 import { maskUsd } from '@/lib/privacyMoney';
-import { formatPeriod, type Period, MONTH_NAMES_LONG } from '@/lib/period';
+import { formatPeriod, type Period, MONTH_NAMES_LONG, MONTH_NAMES_SHORT } from '@/lib/period';
 import { StatusPanel } from '@/components/StatusPanel';
 import { Sparkline } from '@/components/Sparkline';
 import { Badge, Button, Card, RT } from '@/components/ds';
@@ -71,6 +72,19 @@ export function BalanceSheetPage() {
       ? { year: period.year - 1, month: 12 }
       : { year: period.year, month: period.month - 1 };
   const priorIso = useMemo(() => periodToBsMonth(priorPeriod), [priorPeriod]);
+
+  // Latest explicit entry on or before the as-of month, per item. An item is
+  // "updated" for the month only when that entry is for the month itself;
+  // otherwise its value is carried forward from an earlier month.
+  const lastEntryIso = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const v of values) {
+      if (v.as_of_month > targetIso) continue;
+      const cur = m.get(v.item_id);
+      if (!cur || v.as_of_month > cur) m.set(v.item_id, v.as_of_month);
+    }
+    return m;
+  }, [values, targetIso]);
 
   const effective = useMemo(
     () => effectiveValuesAt(values, targetIso),
@@ -109,8 +123,18 @@ export function BalanceSheetPage() {
       ) : loading ? (
         <StatusPanel kind="loading" message="Loading balance sheet…" />
       ) : (
+        <>
+        <UpdateStatusBanner
+          items={items.filter((i) => i.is_active)}
+          lastEntryIso={lastEntryIso}
+          targetIso={targetIso}
+          period={period}
+          onSelect={setSelectedItemId}
+        />
         <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1fr_420px]">
           <ItemsPanel
+            lastEntryIso={lastEntryIso}
+            targetIso={targetIso}
             items={items}
             values={values}
             effective={effective}
@@ -135,6 +159,7 @@ export function BalanceSheetPage() {
             }}
           />
         </div>
+        </>
       )}
     </div>
   );
@@ -152,10 +177,12 @@ interface ItemsPanelProps {
   series24Period: Period;
   selectedItemId: string | null;
   onSelect: (id: string) => void;
+  lastEntryIso: Map<string, string>;
+  targetIso: string;
 }
 
 function ItemsPanel(props: ItemsPanelProps) {
-  const { items, values, effective, effectivePrior, series24Period, selectedItemId, onSelect } = props;
+  const { items, values, effective, effectivePrior, series24Period, selectedItemId, onSelect, lastEntryIso, targetIso } = props;
   const [showInactive, setShowInactive] = useState(false);
 
   const visible = items.filter((i) => showInactive || i.is_active);
@@ -187,6 +214,8 @@ function ItemsPanel(props: ItemsPanelProps) {
           seriesPeriod={series24Period}
           selectedItemId={selectedItemId}
           onSelect={onSelect}
+          lastEntryIso={lastEntryIso}
+          targetIso={targetIso}
         />
         <ItemSection
           title="Liabilities"
@@ -197,6 +226,8 @@ function ItemsPanel(props: ItemsPanelProps) {
           seriesPeriod={series24Period}
           selectedItemId={selectedItemId}
           onSelect={onSelect}
+          lastEntryIso={lastEntryIso}
+          targetIso={targetIso}
         />
       </Card>
 
@@ -215,6 +246,8 @@ function ItemsPanel(props: ItemsPanelProps) {
             seriesPeriod={series24Period}
             selectedItemId={selectedItemId}
             onSelect={onSelect}
+            lastEntryIso={lastEntryIso}
+            targetIso={targetIso}
             hideTotal
           />
         </Card>
@@ -233,6 +266,8 @@ interface ItemSectionProps {
   selectedItemId: string | null;
   onSelect: (id: string) => void;
   hideTotal?: boolean;
+  lastEntryIso: Map<string, string>;
+  targetIso: string;
 }
 
 function ItemSection({
@@ -245,6 +280,8 @@ function ItemSection({
   selectedItemId,
   onSelect,
   hideTotal,
+  lastEntryIso,
+  targetIso,
 }: ItemSectionProps) {
   const { hideIncomeAssets } = usePrivacyMode();
   const $ = (n: number) => maskUsd(hideIncomeAssets, n, true);
@@ -295,10 +332,20 @@ function ItemSection({
                   isSel ? 'bg-gold-100/60' : 'hover:bg-navy-50/40'
                 } ${it.is_active ? '' : 'text-gray-400'}`}
               >
-                <td className="px-3 py-1.5 font-medium">{it.name}</td>
+                <td className="px-3 py-1.5 font-medium">
+                  <span className="inline-flex items-center gap-2">
+                    {it.is_active && (
+                      <UpdateDot lastIso={lastEntryIso.get(it.id) ?? null} targetIso={targetIso} />
+                    )}
+                    {it.name}
+                  </span>
+                </td>
                 <td className="px-3 py-1.5 text-sm text-gray-500">{it.equity_group || '—'}</td>
                 <td className="px-3 py-1.5 text-right tabular-nums">
                   {v == null ? <span className="text-gray-300">—</span> : $(v)}
+                  {it.is_active && (
+                    <StaleNote lastIso={lastEntryIso.get(it.id) ?? null} targetIso={targetIso} />
+                  )}
                 </td>
                 <td
                   className={`px-3 py-1.5 text-right tabular-nums ${
@@ -544,6 +591,112 @@ function QuickAddValue({
         >
           Save
         </Button>
+      </div>
+    </div>
+  );
+}
+
+// ----------------------------------------------------------------------------
+// "Updated this month?" indicators
+// ----------------------------------------------------------------------------
+
+function shortMonth(iso: string): string {
+  const p = bsMonthToPeriod(iso);
+  return `${MONTH_NAMES_SHORT[p.month - 1]} '${String(p.year).slice(-2)}`;
+}
+
+/** Green = entered for this month, amber = carried forward, gray = no value yet. */
+function UpdateDot({ lastIso, targetIso }: { lastIso: string | null; targetIso: string }) {
+  const updated = lastIso === targetIso;
+  const cls = updated ? 'bg-pos' : lastIso ? 'bg-warn' : 'bg-gray-300';
+  const title = updated
+    ? 'Updated for this month'
+    : lastIso
+      ? `Not updated this month — carried forward from ${shortMonth(lastIso)}`
+      : 'No value entered yet';
+  return <span className={`inline-block h-2 w-2 shrink-0 rounded-full ${cls}`} title={title} aria-label={title} />;
+}
+
+/** Small caption under the value when it isn't from this month. */
+function StaleNote({ lastIso, targetIso }: { lastIso: string | null; targetIso: string }) {
+  if (lastIso === targetIso) return null;
+  return (
+    <div className="text-[10.5px] font-medium leading-tight text-warn">
+      {lastIso ? `from ${shortMonth(lastIso)}` : 'no value yet'}
+    </div>
+  );
+}
+
+function UpdateStatusBanner({
+  items,
+  lastEntryIso,
+  targetIso,
+  period,
+  onSelect,
+}: {
+  items: BsItem[];
+  lastEntryIso: Map<string, string>;
+  targetIso: string;
+  period: Period;
+  onSelect: (id: string) => void;
+}) {
+  if (items.length === 0) return null;
+  const stale = items.filter((i) => lastEntryIso.get(i.id) !== targetIso);
+  const month = formatPeriod(period);
+
+  if (stale.length === 0) {
+    return (
+      <div className="mb-4 flex items-center gap-2 rounded-lg border border-pos/30 bg-pos-soft px-4 py-2.5 text-sm text-pos">
+        <span className="inline-block h-2 w-2 rounded-full bg-pos" />
+        <span>
+          All {items.length} accounts are updated for <strong>{month}</strong>.
+        </span>
+      </div>
+    );
+  }
+
+  const none = stale.length === items.length;
+  return (
+    <div className="mb-4 rounded-lg border border-warn/40 bg-warn-soft px-4 py-3 text-sm text-navy-900">
+      <div className="flex items-start gap-2">
+        <span className="mt-1.5 inline-block h-2 w-2 shrink-0 rounded-full bg-warn" />
+        <div className="min-w-0">
+          <div>
+            {none ? (
+              <>
+                <strong>No accounts updated for {month} yet.</strong> All values are carried forward from
+                earlier months.
+              </>
+            ) : (
+              <>
+                <strong>
+                  {stale.length} of {items.length} accounts
+                </strong>{' '}
+                not updated for <strong>{month}</strong> — their values are carried forward from an earlier
+                month.
+              </>
+            )}
+          </div>
+          {!none && (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {stale.map((it) => {
+                const last = lastEntryIso.get(it.id);
+                return (
+                  <button
+                    key={it.id}
+                    type="button"
+                    onClick={() => onSelect(it.id)}
+                    className="rounded-full border border-warn/40 bg-white px-2.5 py-0.5 text-xs font-medium text-navy-800 hover:bg-gold-100"
+                    title="Open this account to enter its balance"
+                  >
+                    {it.name}
+                    <span className="ml-1 text-gray-500">{last ? shortMonth(last) : 'none'}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
