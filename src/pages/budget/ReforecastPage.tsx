@@ -920,6 +920,7 @@ export function ReforecastPage() {
                 firstForecastMonth={firstForecastMonth}
                 colCat={colCat}
                 colMonthMin={colMonthMin}
+                colTot={colTot}
                 colVar={colVar}
                 colAvg={colAvg}
                 colEasy={colEasy}
@@ -1334,6 +1335,7 @@ function GrandSummaryFlex({
   firstForecastMonth,
   colCat,
   colMonthMin,
+  colTot,
   colVar,
   colAvg,
   colEasy,
@@ -1348,6 +1350,7 @@ function GrandSummaryFlex({
   firstForecastMonth: number;
   colCat: string;
   colMonthMin: string;
+  colTot: string;
   colVar: string;
   colAvg: string;
   colEasy: string;
@@ -1376,7 +1379,7 @@ function GrandSummaryFlex({
           </div>
         );
       })}
-      <div className="flex shrink-0 items-center justify-end border-l-2 border-gold-500 bg-gold-500 px-3.5 py-3 text-lg font-extrabold tabular-nums text-navy-900">
+      <div className={`${colTot} flex shrink-0 items-center justify-end whitespace-nowrap border-l-2 border-gold-500 bg-gold-500 px-3.5 py-3 ${Math.abs(total) >= 1_000_000 ? 'text-base' : 'text-lg'} font-extrabold tabular-nums text-navy-900`}>
         {fmtUsd(total)}
       </div>
       <div
@@ -1393,7 +1396,7 @@ function GrandSummaryFlex({
           {Math.round(a) !== 0 ? fmtUsd(a) : <span className="text-white/30">—</span>}
         </div>
       ))}
-      <div className={`${colEasy} bg-navy-800`} />
+      <div className={`${colEasy} shrink-0 bg-navy-800`} />
     </div>
   );
 }
